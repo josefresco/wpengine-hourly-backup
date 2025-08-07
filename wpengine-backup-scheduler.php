@@ -408,160 +408,357 @@ class WPEngineBackupScheduler {
     }
     
     /**
-     * Admin page HTML
+     * Admin page HTML with step-by-step onboarding
      */
     public function admin_page() {
         $settings = get_option('wpengine_backup_settings', array());
         $backup_logs = $this->get_recent_backup_logs();
         
+        // Determine setup progress
+        $has_api_credentials = !empty($settings['api_username']) && !empty($settings['api_password']);
+        $has_install_config = !empty($settings['install_id']) && !empty($settings['install_name']);
+        $has_email_config = !empty($settings['email_notifications']);
+        $is_enabled = $settings['enabled'] ?? false;
+        
         ?>
         <div class="wrap">
             <h1><?php _e('WP Engine Backup Scheduler', 'wpengine-backup-scheduler'); ?></h1>
             
+            <!-- Progress Indicator -->
+            <div class="wpengine-setup-progress">
+                <div class="progress-step <?php echo $has_api_credentials ? 'completed' : 'active'; ?>" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-title"><?php _e('API Credentials', 'wpengine-backup-scheduler'); ?></span>
+                </div>
+                <div class="progress-step <?php echo !$has_api_credentials ? 'disabled' : ($has_install_config ? 'completed' : 'active'); ?>" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-title"><?php _e('Install Setup', 'wpengine-backup-scheduler'); ?></span>
+                </div>
+                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_email_config ? 'completed' : 'active'); ?>" data-step="3">
+                    <span class="step-number">3</span>
+                    <span class="step-title"><?php _e('Email & Schedule', 'wpengine-backup-scheduler'); ?></span>
+                </div>
+                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config || !$has_email_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>" data-step="4">
+                    <span class="step-number">4</span>
+                    <span class="step-title"><?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
+                </div>
+            </div>
+            
             <div class="wpengine-backup-container">
                 <div class="wpengine-backup-main">
-                    <!-- API Settings Section -->
-                    <div class="postbox">
-                        <h2 class="hndle"><?php _e('API Settings', 'wpengine-backup-scheduler'); ?></h2>
+                    
+                    <!-- Step 1: API Credentials -->
+                    <div class="postbox setup-step step-1 <?php echo $has_api_credentials ? 'completed' : 'active'; ?>">
+                        <h2 class="hndle">
+                            <span class="step-indicator">1</span>
+                            <?php _e('WP Engine API Credentials', 'wpengine-backup-scheduler'); ?>
+                            <?php if ($has_api_credentials) : ?>
+                                <span class="status-badge completed">✓ <?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
+                            <?php endif; ?>
+                        </h2>
                         <div class="inside">
-                            <form id="wpengine-api-settings">
+                            <?php if (!$has_api_credentials) : ?>
+                                <div class="setup-intro">
+                                    <p><?php _e('First, you need to create API credentials in your WP Engine User Portal.', 'wpengine-backup-scheduler'); ?></p>
+                                    <p><strong><a href="https://my.wpengine.com/profile/api_access" target="_blank" class="button button-secondary">
+                                        <?php _e('Open WP Engine API Settings →', 'wpengine-backup-scheduler'); ?>
+                                    </a></strong></p>
+                                    <p class="description">
+                                        <?php _e('Click the link above to create your API username and password in the WP Engine User Portal. You\'ll need these to connect your site to the WP Engine backup system.', 'wpengine-backup-scheduler'); ?>
+                                    </p>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <form id="wpengine-api-settings" class="<?php echo $has_api_credentials ? 'collapsed' : ''; ?>">
                                 <table class="form-table">
                                     <tr>
-                                        <th scope="row"><?php _e('API Username', 'wpengine-backup-scheduler'); ?></th>
+                                        <th scope="row">
+                                            <label for="api_username"><?php _e('API Username', 'wpengine-backup-scheduler'); ?> <span class="required">*</span></label>
+                                        </th>
                                         <td>
-                                            <input type="text" name="api_username" value="<?php echo esc_attr($settings['api_username'] ?? ''); ?>" class="regular-text" />
-                                            <p class="description"><?php _e('Your WP Engine API username', 'wpengine-backup-scheduler'); ?></p>
+                                            <input type="text" name="api_username" id="api_username" value="<?php echo esc_attr($settings['api_username'] ?? ''); ?>" class="regular-text" required />
+                                            <p class="description"><?php _e('The API username from your WP Engine User Portal', 'wpengine-backup-scheduler'); ?></p>
                                         </td>
                                     </tr>
                                     <tr>
-                                        <th scope="row"><?php _e('API Password', 'wpengine-backup-scheduler'); ?></th>
+                                        <th scope="row">
+                                            <label for="api_password"><?php _e('API Password', 'wpengine-backup-scheduler'); ?> <span class="required">*</span></label>
+                                        </th>
                                         <td>
-                                            <input type="password" name="api_password" value="<?php echo esc_attr($settings['api_password'] ?? ''); ?>" class="regular-text" />
-                                            <p class="description"><?php _e('Your WP Engine API password', 'wpengine-backup-scheduler'); ?></p>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th scope="row"><?php _e('Current Install', 'wpengine-backup-scheduler'); ?></th>
-                                        <td>
-                                            <?php
-                                            $current_install = $this->get_current_install_info();
-                                            if (!empty($current_install['name'])) {
-                                                echo '<div class="notice notice-info inline" style="margin: 0 0 10px 0; padding: 8px 12px;">';
-                                                echo '<p style="margin: 0;"><strong>' . __('Detected Current Install:', 'wpengine-backup-scheduler') . '</strong> ';
-                                                echo esc_html($current_install['name']);
-                                                if (!empty($current_install['environment'])) {
-                                                    echo ' <span style="color: #0073aa;">(' . esc_html($current_install['environment']) . ')</span>';
-                                                }
-                                                echo '</p></div>';
-                                            }
-                                            ?>
-                                            
-                                            <button type="button" id="auto-detect-install-btn" class="button button-primary">
-                                                <?php _e('Auto-Detect & Configure Current Install', 'wpengine-backup-scheduler'); ?>
-                                            </button>
-                                            <span id="auto-detect-status"></span>
-                                            
-                                            <p class="description" style="margin-top: 10px;">
-                                                <?php _e('This will automatically detect the current WP Engine install and configure the plugin.', 'wpengine-backup-scheduler'); ?>
-                                            </p>
-                                            
-                                            <details style="margin-top: 15px;">
-                                                <summary style="cursor: pointer; font-weight: bold;"><?php _e('Manual Configuration', 'wpengine-backup-scheduler'); ?></summary>
-                                                <div style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">
-                                            
-                                            <button type="button" id="fetch-installs-btn" class="button" style="margin-bottom: 10px;">
-                                                <?php _e('Load All My Installs', 'wpengine-backup-scheduler'); ?>
-                                            </button>
-                                            <span id="fetch-installs-status"></span>
-                                            <div id="installs-list" style="margin-top: 10px;"></div>
-                                            
-                                            <p><strong><?php _e('Or enter manually:', 'wpengine-backup-scheduler'); ?></strong></p>
-                                            <label><?php _e('Install ID:', 'wpengine-backup-scheduler'); ?></label><br>
-                                            <input type="text" name="install_id" value="<?php echo esc_attr($settings['install_id'] ?? ''); ?>" class="regular-text" placeholder="e.g., 12345" />
-                                            <p class="description"><?php _e('Your WP Engine install ID (numeric)', 'wpengine-backup-scheduler'); ?></p>
-                                            
-                                            <label><?php _e('Install Name (for reference):', 'wpengine-backup-scheduler'); ?></label><br>
-                                            <input type="text" name="install_name" value="<?php echo esc_attr($settings['install_name'] ?? ''); ?>" class="regular-text" placeholder="e.g., mysite" readonly />
-                                            <p class="description"><?php _e('This will be filled automatically when you select an install above', 'wpengine-backup-scheduler'); ?></p>
-                                            
-                                                </div>
-                                            </details>
+                                            <input type="password" name="api_password" id="api_password" value="<?php echo esc_attr($settings['api_password'] ?? ''); ?>" class="regular-text" required />
+                                            <p class="description"><?php _e('The API password from your WP Engine User Portal', 'wpengine-backup-scheduler'); ?></p>
                                         </td>
                                     </tr>
                                 </table>
-                                <p>
-                                    <button type="submit" class="button-primary"><?php _e('Save API Settings', 'wpengine-backup-scheduler'); ?></button>
-                                    <button type="button" id="test-api-connection" class="button"><?php _e('Test API Connection', 'wpengine-backup-scheduler'); ?></button>
-                                    <button type="button" id="debug-settings" class="button" style="margin-left: 10px;"><?php _e('Debug Settings', 'wpengine-backup-scheduler'); ?></button>
+                                
+                                <div class="step-actions">
+                                    <button type="submit" class="button-primary" id="save-api-btn">
+                                        <?php _e('Save & Test Credentials', 'wpengine-backup-scheduler'); ?>
+                                    </button>
                                     <span id="api-test-result"></span>
-                                </p>
-                                <div id="debug-output" style="display: none; margin-top: 10px; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; font-family: monospace; font-size: 12px;"></div>
-                            </form>
-                        </div>
-                    </div>
-                    
-                    <!-- Email Notifications Section -->
-                    <div class="postbox">
-                        <h2 class="hndle"><?php _e('Email Notifications', 'wpengine-backup-scheduler'); ?></h2>
-                        <div class="inside">
-                            <p><?php _e('Configure email notifications for backup completion. This is required by the WP Engine API.', 'wpengine-backup-scheduler'); ?></p>
-                            <form id="wpengine-email-settings">
-                                <table class="form-table">
-                                    <tr>
-                                        <th scope="row"><?php _e('Email Address', 'wpengine-backup-scheduler'); ?></th>
-                                        <td>
-                                            <input type="email" name="email_notifications" value="<?php echo esc_attr($settings['email_notifications'] ?? ''); ?>" class="regular-text" required />
-                                            <p class="description"><strong><?php _e('Required:', 'wpengine-backup-scheduler'); ?></strong> <?php _e('Email address to notify when backups complete. This is required by the WP Engine API.', 'wpengine-backup-scheduler'); ?></p>
-                                        </td>
-                                    </tr>
-                                </table>
-                                <p>
-                                    <button type="submit" class="button-primary"><?php _e('Save Email Settings', 'wpengine-backup-scheduler'); ?></button>
-                                </p>
-                            </form>
-                        </div>
-                    </div>
-                    
-                    <!-- Backup Schedule Section -->
-                    <div class="postbox">
-                        <h2 class="hndle"><?php _e('Backup Schedule', 'wpengine-backup-scheduler'); ?></h2>
-                        <div class="inside">
-                            <form id="wpengine-backup-schedule">
-                                <table class="form-table">
-                                    <tr>
-                                        <th scope="row"><?php _e('Enable Automatic Backups', 'wpengine-backup-scheduler'); ?></th>
-                                        <td>
-                                            <label>
-                                                <input type="checkbox" name="enabled" value="1" <?php checked($settings['enabled'] ?? false); ?> />
-                                                <?php _e('Enable scheduled backups', 'wpengine-backup-scheduler'); ?>
-                                            </label>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th scope="row"><?php _e('Backup Frequency', 'wpengine-backup-scheduler'); ?></th>
-                                        <td>
-                                            <select name="backup_frequency">
-                                                <?php for ($i = 1; $i <= 23; $i++) : ?>
-                                                    <option value="<?php echo $i; ?>" <?php selected($settings['backup_frequency'] ?? 24, $i); ?>>
-                                                        <?php printf(_n('Every %d Hour', 'Every %d Hours', $i, 'wpengine-backup-scheduler'), $i); ?>
-                                                    </option>
-                                                <?php endfor; ?>
-                                                <option value="24" <?php selected($settings['backup_frequency'] ?? 24, 24); ?>>
-                                                    <?php _e('Every 24 Hours (Daily)', 'wpengine-backup-scheduler'); ?>
-                                                </option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                </table>
-                                <p>
-                                    <button type="submit" class="button-primary"><?php _e('Save Schedule Settings', 'wpengine-backup-scheduler'); ?></button>
-                                    <?php if ($settings['enabled'] ?? false) : ?>
-                                        <button type="button" id="cancel-schedule-btn" class="button button-secondary" style="margin-left: 10px;">
-                                            <?php _e('Cancel Scheduled Backups', 'wpengine-backup-scheduler'); ?>
+                                </div>
+                                
+                                <?php if ($has_api_credentials) : ?>
+                                    <div class="step-completed-actions">
+                                        <button type="button" class="button-secondary" onclick="toggleStepEdit(1)">
+                                            <?php _e('Edit Credentials', 'wpengine-backup-scheduler'); ?>
                                         </button>
-                                    <?php endif; ?>
-                                </p>
+                                        <button type="button" id="test-api-connection" class="button">
+                                            <?php _e('Test Connection', 'wpengine-backup-scheduler'); ?>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
                             </form>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Install Configuration -->
+                    <div class="postbox setup-step step-2 <?php echo !$has_api_credentials ? 'disabled' : ($has_install_config ? 'completed' : 'active'); ?>">
+                        <h2 class="hndle">
+                            <span class="step-indicator">2</span>
+                            <?php _e('Install Configuration', 'wpengine-backup-scheduler'); ?>
+                            <?php if ($has_install_config) : ?>
+                                <span class="status-badge completed">✓ <?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
+                            <?php endif; ?>
+                        </h2>
+                        <div class="inside">
+                            <?php if (!$has_api_credentials) : ?>
+                                <div class="step-disabled-notice">
+                                    <p><?php _e('Complete Step 1 first to configure your WP Engine install.', 'wpengine-backup-scheduler'); ?></p>
+                                </div>
+                            <?php else : ?>
+                                <?php
+                                $current_install = $this->get_current_install_info();
+                                if (!empty($current_install['name'])) :
+                                ?>
+                                    <div class="current-install-detected">
+                                        <div class="notice notice-info inline">
+                                            <p><strong><?php _e('Auto-Detected Install:', 'wpengine-backup-scheduler'); ?></strong> 
+                                            <?php echo esc_html($current_install['name']); ?>
+                                            <?php if (!empty($current_install['environment'])) : ?>
+                                                <span class="env-badge"><?php echo esc_html($current_install['environment']); ?></span>
+                                            <?php endif; ?>
+                                            </p>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <form id="wpengine-install-settings" class="<?php echo $has_install_config ? 'collapsed' : ''; ?>">
+                                    <div class="install-auto-detect">
+                                        <button type="button" id="auto-detect-install-btn" class="button button-primary">
+                                            <?php _e('Auto-Detect & Configure Current Install', 'wpengine-backup-scheduler'); ?>
+                                        </button>
+                                        <span id="auto-detect-status"></span>
+                                        <p class="description">
+                                            <?php _e('Automatically detect and configure the current WP Engine install (recommended).', 'wpengine-backup-scheduler'); ?>
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="manual-config-toggle">
+                                        <button type="button" class="button-link" onclick="toggleManualConfig()">
+                                            <?php _e('Or configure manually ↓', 'wpengine-backup-scheduler'); ?>
+                                        </button>
+                                    </div>
+                                    
+                                    <div id="manual-install-config" class="manual-config" style="display: none;">
+                                        <table class="form-table">
+                                            <tr>
+                                                <th scope="row"><?php _e('Install ID', 'wpengine-backup-scheduler'); ?></th>
+                                                <td>
+                                                    <input type="text" name="install_id" value="<?php echo esc_attr($settings['install_id'] ?? ''); ?>" class="regular-text" placeholder="e.g., 12345" />
+                                                    <p class="description"><?php _e('Your WP Engine install ID (numeric)', 'wpengine-backup-scheduler'); ?></p>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row"><?php _e('Install Name', 'wpengine-backup-scheduler'); ?></th>
+                                                <td>
+                                                    <input type="text" name="install_name" value="<?php echo esc_attr($settings['install_name'] ?? ''); ?>" class="regular-text" placeholder="e.g., mysite" />
+                                                    <p class="description"><?php _e('Your WP Engine install name for reference', 'wpengine-backup-scheduler'); ?></p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <button type="button" id="fetch-installs-btn" class="button">
+                                            <?php _e('Load All My Installs', 'wpengine-backup-scheduler'); ?>
+                                        </button>
+                                        <span id="fetch-installs-status"></span>
+                                        <div id="installs-list"></div>
+                                    </div>
+                                    
+                                    <?php if ($has_install_config) : ?>
+                                        <div class="current-config">
+                                            <table class="form-table">
+                                                <tr>
+                                                    <th scope="row"><?php _e('Current Install', 'wpengine-backup-scheduler'); ?></th>
+                                                    <td>
+                                                        <strong><?php echo esc_html($settings['install_name'] ?? 'Unknown'); ?></strong> 
+                                                        (ID: <?php echo esc_html($settings['install_id'] ?? 'Unknown'); ?>)
+                                                        <button type="button" class="button-secondary" onclick="toggleStepEdit(2)" style="margin-left: 10px;">
+                                                            <?php _e('Change Install', 'wpengine-backup-scheduler'); ?>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    <?php endif; ?>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Email & Schedule Configuration -->
+                    <div class="postbox setup-step step-3 <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_email_config ? 'completed' : 'active'); ?>">
+                        <h2 class="hndle">
+                            <span class="step-indicator">3</span>
+                            <?php _e('Email & Schedule Configuration', 'wpengine-backup-scheduler'); ?>
+                            <?php if ($has_email_config) : ?>
+                                <span class="status-badge completed">✓ <?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
+                            <?php endif; ?>
+                        </h2>
+                        <div class="inside">
+                            <?php if (!$has_api_credentials || !$has_install_config) : ?>
+                                <div class="step-disabled-notice">
+                                    <p><?php _e('Complete the previous steps first to configure email notifications and scheduling.', 'wpengine-backup-scheduler'); ?></p>
+                                </div>
+                            <?php else : ?>
+                                <form id="wpengine-email-schedule-settings" class="<?php echo ($has_email_config && $is_enabled) ? 'collapsed' : ''; ?>">
+                                    <div class="form-section">
+                                        <h3><?php _e('Email Notifications', 'wpengine-backup-scheduler'); ?> <span class="required">*</span></h3>
+                                        <p class="section-description"><?php _e('Email notifications are required by the WP Engine API for backup completion.', 'wpengine-backup-scheduler'); ?></p>
+                                        
+                                        <table class="form-table">
+                                            <tr>
+                                                <th scope="row">
+                                                    <label for="email_notifications"><?php _e('Notification Email', 'wpengine-backup-scheduler'); ?> <span class="required">*</span></label>
+                                                </th>
+                                                <td>
+                                                    <input type="email" name="email_notifications" id="email_notifications" 
+                                                           value="<?php echo esc_attr($settings['email_notifications'] ?? ''); ?>" 
+                                                           class="regular-text" required />
+                                                    <p class="description"><?php _e('You\'ll receive notifications when backups complete or fail.', 'wpengine-backup-scheduler'); ?></p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="form-section">
+                                        <h3><?php _e('Backup Schedule', 'wpengine-backup-scheduler'); ?></h3>
+                                        <p class="section-description"><?php _e('Configure how often you want automatic backups to run.', 'wpengine-backup-scheduler'); ?></p>
+                                        
+                                        <table class="form-table">
+                                            <tr>
+                                                <th scope="row"><?php _e('Backup Frequency', 'wpengine-backup-scheduler'); ?></th>
+                                                <td>
+                                                    <select name="backup_frequency" id="backup_frequency">
+                                                        <option value="1" <?php selected($settings['backup_frequency'] ?? 24, 1); ?>><?php _e('Every Hour', 'wpengine-backup-scheduler'); ?></option>
+                                                        <?php for ($i = 2; $i <= 23; $i++) : ?>
+                                                            <option value="<?php echo $i; ?>" <?php selected($settings['backup_frequency'] ?? 24, $i); ?>>
+                                                                <?php printf(__('Every %d Hours', 'wpengine-backup-scheduler'), $i); ?>
+                                                            </option>
+                                                        <?php endfor; ?>
+                                                        <option value="24" <?php selected($settings['backup_frequency'] ?? 24, 24); ?>><?php _e('Daily (24 Hours)', 'wpengine-backup-scheduler'); ?></option>
+                                                    </select>
+                                                    <p class="description"><?php _e('More frequent backups provide better protection but use more resources.', 'wpengine-backup-scheduler'); ?></p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="step-actions">
+                                        <button type="submit" class="button-primary">
+                                            <?php _e('Save Configuration', 'wpengine-backup-scheduler'); ?>
+                                        </button>
+                                        <span id="email-schedule-status"></span>
+                                    </div>
+                                    
+                                    <?php if ($has_email_config) : ?>
+                                        <div class="step-completed-actions">
+                                            <button type="button" class="button-secondary" onclick="toggleStepEdit(3)">
+                                                <?php _e('Edit Configuration', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Complete & Enable -->
+                    <div class="postbox setup-step step-4 <?php echo (!$has_api_credentials || !$has_install_config || !$has_email_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>">
+                        <h2 class="hndle">
+                            <span class="step-indicator">4</span>
+                            <?php _e('Complete Setup', 'wpengine-backup-scheduler'); ?>
+                            <?php if ($is_enabled) : ?>
+                                <span class="status-badge completed">✓ <?php _e('Active', 'wpengine-backup-scheduler'); ?></span>
+                            <?php endif; ?>
+                        </h2>
+                        <div class="inside">
+                            <?php if (!$has_api_credentials || !$has_install_config || !$has_email_config) : ?>
+                                <div class="step-disabled-notice">
+                                    <p><?php _e('Complete all previous steps to enable automatic backups.', 'wpengine-backup-scheduler'); ?></p>
+                                </div>
+                            <?php else : ?>
+                                <?php if (!$is_enabled) : ?>
+                                    <div class="setup-final">
+                                        <div class="final-step-info">
+                                            <h3><?php _e('🎉 Ready to Enable Automatic Backups!', 'wpengine-backup-scheduler'); ?></h3>
+                                            <p><?php _e('Your configuration is complete. Click the button below to start automatic backups.', 'wpengine-backup-scheduler'); ?></p>
+                                            
+                                            <div class="config-summary">
+                                                <h4><?php _e('Configuration Summary:', 'wpengine-backup-scheduler'); ?></h4>
+                                                <ul>
+                                                    <li><strong><?php _e('WP Engine Install:', 'wpengine-backup-scheduler'); ?></strong> <?php echo esc_html($settings['install_name'] ?? 'Unknown'); ?> (<?php echo esc_html($settings['install_id'] ?? 'Unknown'); ?>)</li>
+                                                    <li><strong><?php _e('Email Notifications:', 'wpengine-backup-scheduler'); ?></strong> <?php echo esc_html($settings['email_notifications'] ?? 'None'); ?></li>
+                                                    <li><strong><?php _e('Backup Frequency:', 'wpengine-backup-scheduler'); ?></strong> <?php echo ($settings['backup_frequency'] ?? 24) == 1 ? __('Every Hour', 'wpengine-backup-scheduler') : sprintf(__('Every %d Hours', 'wpengine-backup-scheduler'), $settings['backup_frequency'] ?? 24); ?></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="final-actions">
+                                            <button type="button" id="enable-backups-btn" class="button-primary button-large">
+                                                <?php _e('🚀 Enable Automatic Backups', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                            <span id="enable-backups-status"></span>
+                                        </div>
+                                        
+                                        <div class="test-actions">
+                                            <p><?php _e('Want to test first?', 'wpengine-backup-scheduler'); ?></p>
+                                            <button type="button" id="test-backup-final-btn" class="button">
+                                                <?php _e('Create Test Backup', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                <?php else : ?>
+                                    <div class="setup-completed">
+                                        <div class="success-message">
+                                            <h3>✅ <?php _e('Automatic Backups Enabled!', 'wpengine-backup-scheduler'); ?></h3>
+                                            <p><?php _e('Your WP Engine backup scheduler is now active and running.', 'wpengine-backup-scheduler'); ?></p>
+                                            
+                                            <?php
+                                            $next_backup = wp_next_scheduled('wpengine_backup_cron_hook');
+                                            if ($next_backup) :
+                                            ?>
+                                                <div class="next-backup-info">
+                                                    <p><strong><?php _e('Next Backup:', 'wpengine-backup-scheduler'); ?></strong> 
+                                                    <?php echo date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_backup); ?></p>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <div class="management-actions">
+                                            <button type="button" id="create-manual-backup-btn" class="button button-primary">
+                                                <?php _e('Create Manual Backup', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                            <button type="button" class="button-secondary" onclick="toggleStepEdit(4)">
+                                                <?php _e('Change Settings', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                            <button type="button" id="disable-backups-btn" class="button-secondary">
+                                                <?php _e('Disable Backups', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endif; ?>
                         </div>
                     </div>
                     
@@ -724,6 +921,354 @@ class WPEngineBackupScheduler {
         }
         .status-running {
             color: #ffb900;
+        }
+        
+        /* Step-by-step onboarding styles */
+        .wpengine-setup-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f0f6fc;
+            border: 1px solid #c3d9ff;
+            border-radius: 6px;
+        }
+        
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 0 15px;
+            min-width: 120px;
+        }
+        
+        .progress-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            right: -20px;
+            width: 40px;
+            height: 2px;
+            background: #ddd;
+            z-index: 1;
+        }
+        
+        .progress-step.completed::after {
+            background: #46b450;
+        }
+        
+        .progress-step.active::after {
+            background: linear-gradient(to right, #0073aa 50%, #ddd 50%);
+        }
+        
+        .step-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #ddd;
+            color: #666;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .progress-step.active .step-number {
+            background: #0073aa;
+            color: white;
+        }
+        
+        .progress-step.completed .step-number {
+            background: #46b450;
+            color: white;
+        }
+        
+        .progress-step.completed .step-number::after {
+            content: '✓';
+            position: absolute;
+            font-size: 16px;
+        }
+        
+        .progress-step.disabled .step-number {
+            background: #f0f0f0;
+            color: #ccc;
+        }
+        
+        .step-title {
+            font-size: 12px;
+            text-align: center;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .progress-step.active .step-title {
+            color: #0073aa;
+            font-weight: 600;
+        }
+        
+        .progress-step.completed .step-title {
+            color: #46b450;
+            font-weight: 600;
+        }
+        
+        .progress-step.disabled .step-title {
+            color: #ccc;
+        }
+        
+        /* Setup step styles */
+        .setup-step {
+            transition: opacity 0.3s ease;
+        }
+        
+        .setup-step.disabled {
+            opacity: 0.6;
+        }
+        
+        .setup-step .hndle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+        }
+        
+        .step-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ddd;
+            color: #666;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .setup-step.active .step-indicator {
+            background: #0073aa;
+            color: white;
+        }
+        
+        .setup-step.completed .step-indicator {
+            background: #46b450;
+            color: white;
+        }
+        
+        .setup-step.completed .step-indicator::after {
+            content: '✓';
+            position: absolute;
+            font-size: 14px;
+        }
+        
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: auto;
+        }
+        
+        .status-badge.completed {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        /* Setup form styles */
+        .setup-intro {
+            background: #e7f3ff;
+            padding: 15px;
+            border-left: 4px solid #0073aa;
+            margin-bottom: 20px;
+        }
+        
+        .setup-intro p {
+            margin: 0 0 10px 0;
+        }
+        
+        .setup-intro .button {
+            text-decoration: none;
+        }
+        
+        .form-section {
+            margin-bottom: 25px;
+        }
+        
+        .form-section h3 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            color: #23282d;
+        }
+        
+        .section-description {
+            margin-bottom: 15px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .step-actions {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .step-completed-actions {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .step-disabled-notice {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-left: 4px solid #6c757d;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .step-disabled-notice p {
+            margin: 0;
+            color: #6c757d;
+        }
+        
+        /* Collapsed form state */
+        .setup-step.completed form.collapsed {
+            display: none;
+        }
+        
+        .current-config {
+            background: #f0f6fc;
+            padding: 15px;
+            border: 1px solid #c3d9ff;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        
+        /* Environment detection styles */
+        .current-install-detected {
+            margin-bottom: 15px;
+        }
+        
+        .env-badge {
+            background: #0073aa;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+        
+        /* Final step styles */
+        .setup-final,
+        .setup-completed {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .final-step-info h3,
+        .success-message h3 {
+            color: #0073aa;
+            margin-bottom: 15px;
+        }
+        
+        .config-summary {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .config-summary h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        
+        .config-summary ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .config-summary li {
+            margin-bottom: 5px;
+        }
+        
+        .final-actions,
+        .management-actions {
+            margin: 20px 0;
+        }
+        
+        .test-actions {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .test-actions p {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .next-backup-info {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 15px;
+        }
+        
+        .next-backup-info p {
+            margin: 0;
+            color: #155724;
+        }
+        
+        /* Manual config toggle */
+        .manual-config-toggle {
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .manual-config {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        /* Required field indicator */
+        .required {
+            color: #dc3232;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 782px) {
+            .wpengine-backup-container {
+                flex-direction: column;
+            }
+            
+            .wpengine-setup-progress {
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            
+            .progress-step {
+                min-width: 80px;
+            }
+            
+            .progress-step:not(:last-child)::after {
+                display: none;
+            }
         }
         </style>
         <?php
@@ -1952,6 +2497,229 @@ add_action('admin_footer', function() {
                 $btn.prop('disabled', false).text(originalText);
             });
         });
+        
+        // Step-by-step onboarding functions
+        
+        // Save API settings for step 1
+        $('#wpengine-api-settings').on('submit', function(e) {
+            e.preventDefault();
+            
+            var $form = $(this);
+            var $btn = $('#save-api-btn');
+            var $result = $('#api-test-result');
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Saving & Testing...', 'wpengine-backup-scheduler'); ?>');
+            $result.removeClass('status-success status-error').text('');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_save_api_settings',
+                nonce: wpengineBackup.nonce,
+                api_username: $('input[name="api_username"]').val(),
+                api_password: $('input[name="api_password"]').val()
+            }, function(response) {
+                if (response.success) {
+                    $result.addClass('status-success').text('<?php _e('API credentials saved and tested successfully!', 'wpengine-backup-scheduler'); ?>');
+                    
+                    // Mark step 1 as completed and refresh page to update UI state
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    $result.addClass('status-error').text(response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Save email and schedule settings for step 3
+        $('#wpengine-email-schedule-settings').on('submit', function(e) {
+            e.preventDefault();
+            
+            var $form = $(this);
+            var $btn = $form.find('button[type="submit"]');
+            var $status = $('#email-schedule-status');
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Saving...', 'wpengine-backup-scheduler'); ?>');
+            $status.removeClass('status-success status-error').text('');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_save_api_settings',
+                nonce: wpengineBackup.nonce,
+                api_username: $('input[name="api_username"]').val(),
+                api_password: $('input[name="api_password"]').val(),
+                install_id: $('input[name="install_id"]').val(),
+                install_name: $('input[name="install_name"]').val(),
+                email_notifications: $('input[name="email_notifications"]').val(),
+                backup_frequency: $('select[name="backup_frequency"]').val()
+            }, function(response) {
+                if (response.success) {
+                    $status.addClass('status-success').text('<?php _e('Configuration saved successfully!', 'wpengine-backup-scheduler'); ?>');
+                    
+                    // Mark step 3 as completed and refresh page
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    $status.addClass('status-error').text(response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Enable automatic backups (final step)
+        $('#enable-backups-btn').on('click', function() {
+            var $btn = $(this);
+            var $status = $('#enable-backups-status');
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Enabling...', 'wpengine-backup-scheduler'); ?>');
+            $status.removeClass('status-success status-error').text('');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_save_schedule',
+                nonce: wpengineBackup.nonce,
+                api_username: $('input[name="api_username"]').val(),
+                api_password: $('input[name="api_password"]').val(),
+                install_id: $('input[name="install_id"]').val(),
+                install_name: $('input[name="install_name"]').val(),
+                backup_frequency: $('select[name="backup_frequency"]').val(),
+                email_notifications: $('input[name="email_notifications"]').val(),
+                enabled: 1
+            }, function(response) {
+                if (response.success) {
+                    $status.addClass('status-success').text('<?php _e('🎉 Automatic backups enabled successfully!', 'wpengine-backup-scheduler'); ?>');
+                    
+                    // Reload page to show completed state
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    $status.addClass('status-error').text(response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Disable automatic backups
+        $('#disable-backups-btn').on('click', function() {
+            if (!confirm('<?php _e('Are you sure you want to disable automatic backups?', 'wpengine-backup-scheduler'); ?>')) {
+                return;
+            }
+            
+            var $btn = $(this);
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Disabling...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_cancel_schedule',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                if (response.success) {
+                    // Show success message and reload
+                    $('<div class="notice notice-success is-dismissible"><p>' + response.data + '</p></div>')
+                        .insertAfter('.wrap h1').delay(2000).fadeOut();
+                    
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    alert(response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Test backup from final step
+        $('#test-backup-final-btn').on('click', function() {
+            var $btn = $(this);
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Creating Test Backup...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_create_backup',
+                nonce: wpengineBackup.nonce,
+                description: 'Test backup before enabling automatic backups'
+            }, function(response) {
+                if (response.success) {
+                    alert('<?php _e('Test backup created successfully! Check your email for confirmation.', 'wpengine-backup-scheduler'); ?>');
+                } else {
+                    alert('<?php _e('Test backup failed: ', 'wpengine-backup-scheduler'); ?>' + response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Create manual backup from final step
+        $('#create-manual-backup-btn').on('click', function() {
+            var description = prompt('<?php _e('Enter backup description (optional):', 'wpengine-backup-scheduler'); ?>');
+            if (description === null) return; // User cancelled
+            
+            var $btn = $(this);
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Creating Backup...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_create_backup',
+                nonce: wpengineBackup.nonce,
+                description: description || ''
+            }, function(response) {
+                if (response.success) {
+                    alert('<?php _e('Manual backup created successfully!', 'wpengine-backup-scheduler'); ?>');
+                    
+                    // Reload to show in recent activity
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    alert('<?php _e('Backup failed: ', 'wpengine-backup-scheduler'); ?>' + response.data);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Toggle manual configuration visibility
+        window.toggleManualConfig = function() {
+            var $manualConfig = $('#manual-install-config');
+            var $toggle = $('.manual-config-toggle button');
+            
+            if ($manualConfig.is(':visible')) {
+                $manualConfig.slideUp();
+                $toggle.text('<?php _e('Or configure manually ↓', 'wpengine-backup-scheduler'); ?>');
+            } else {
+                $manualConfig.slideDown();
+                $toggle.text('<?php _e('Hide manual configuration ↑', 'wpengine-backup-scheduler'); ?>');
+            }
+        };
+        
+        // Toggle step editing mode
+        window.toggleStepEdit = function(stepNumber) {
+            var $step = $('.step-' + stepNumber);
+            var $form = $step.find('form');
+            var $completedActions = $step.find('.step-completed-actions');
+            var $currentConfig = $step.find('.current-config');
+            
+            if ($form.hasClass('collapsed')) {
+                $form.removeClass('collapsed').slideDown();
+                $completedActions.hide();
+                $currentConfig.hide();
+            } else {
+                $form.addClass('collapsed').slideUp();
+                $completedActions.show();
+                $currentConfig.show();
+            }
+        };
+        
     });
     </script>
     <?php
