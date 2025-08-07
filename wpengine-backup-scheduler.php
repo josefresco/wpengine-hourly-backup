@@ -1,11 +1,12 @@
 <?php
 /**
  * Plugin Name: WP Engine Backup Scheduler
- * Plugin URI: https://github.com/yourname/wpengine-backup-scheduler
+ * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
  * Version: 1.0.0
- * Author: Your Name
- * License: GPL v2 or later
+ * Author: josefresco
+ * License: MIT
+ * License URI: https://opensource.org/licenses/MIT
  * Text Domain: wpengine-backup-scheduler
  */
 
