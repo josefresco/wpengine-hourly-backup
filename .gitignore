@@ -1,3 +1,9 @@
+# Development and local files (DO NOT include in releases)
+.claude/
+OLLAMA.md
+*.local
+.env*
+
 # WordPress specific files
 wp-config.php
 wp-content/uploads/
