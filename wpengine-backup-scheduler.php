@@ -3,7 +3,7 @@
  * Plugin Name: WP Engine Backup Scheduler
  * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: josefresco
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
@@ -16,13 +16,20 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPENGINE_BACKUP_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('WPENGINE_BACKUP_VERSION', '1.0.0');
+if (!defined('WPENGINE_BACKUP_PLUGIN_URL')) {
+    define('WPENGINE_BACKUP_PLUGIN_URL', plugin_dir_url(__FILE__));
+}
+if (!defined('WPENGINE_BACKUP_PLUGIN_PATH')) {
+    define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
+}
+if (!defined('WPENGINE_BACKUP_VERSION')) {
+    define('WPENGINE_BACKUP_VERSION', '1.1.0');
+}
 
 /**
  * Main plugin class
  */
+if (!class_exists('WPEngineBackupScheduler')) {
 class WPEngineBackupScheduler {
     
     private $api_base_url = 'https://api.wpengineapi.com/v1';
@@ -2021,9 +2028,12 @@ class WPEngineBackupScheduler {
         ));
     }
 }
+} // End class_exists check
 
 // Initialize the plugin
-new WPEngineBackupScheduler();
+if (class_exists('WPEngineBackupScheduler')) {
+    new WPEngineBackupScheduler();
+}
 
 // Admin JavaScript (inline for simplicity - in production, this should be in a separate file)
 add_action('admin_footer', function() {
