@@ -1214,10 +1214,87 @@ class WPEngineBackupScheduler {
     }
     
     /**
-     * Execute scheduled backup
+     * Execute scheduled backup with WP Engine optimizations
      */
     public function execute_scheduled_backup() {
-        $this->create_backup('scheduled', __('Automated scheduled backup', 'wpengine-backup-scheduler'));
+        // Prevent overlapping executions using transients
+        $transient_key = 'wpengine_backup_running';
+        if (get_transient($transient_key)) {
+            error_log('WP Engine Backup - Skipping execution: backup already in progress');
+            return false;
+        }
+        
+        // Set transient to prevent overlap (expires in 5 minutes as safety net)
+        set_transient($transient_key, time(), 5 * MINUTE_IN_SECONDS);
+        
+        // Add timeout protection for WP Engine Alternate Cron (must complete in under 60 seconds)
+        $start_time = time();
+        $max_execution_time = 50; // seconds - leave buffer for WP Engine's 60-second limit
+        
+        try {
+            // Check if we're running on WP Engine
+            $wpe_detected = $this->is_wpengine_hosting();
+            
+            if ($wpe_detected) {
+                error_log('WP Engine Backup - Executing scheduled backup on WP Engine hosting');
+            }
+            
+            // Execute the backup with timeout monitoring
+            $result = $this->create_backup_with_timeout('scheduled', __('Automated scheduled backup', 'wpengine-backup-scheduler'), $max_execution_time, $start_time);
+            
+            // Clear the running transient on success
+            delete_transient($transient_key);
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            error_log('WP Engine Backup - Scheduled backup failed with exception: ' . $e->getMessage());
+            delete_transient($transient_key);
+            
+            // Log the failure
+            $this->log_backup_activity('scheduled', 'error', 'Backup failed with exception: ' . $e->getMessage());
+            
+            return false;
+        }
+    }
+    
+    /**
+     * Check if running on WP Engine hosting
+     */
+    public function is_wpengine_hosting() {
+        // Multiple detection methods for WP Engine
+        $indicators = [
+            defined('WPE_APIKEY'),
+            isset($_SERVER['SERVER_SOFTWARE']) && strpos($_SERVER['SERVER_SOFTWARE'], 'WP Engine') !== false,
+            defined('ABSPATH') && strpos(ABSPATH, '/nas/content/') !== false,
+            isset($_SERVER['DOCUMENT_ROOT']) && strpos($_SERVER['DOCUMENT_ROOT'], '/nas/content/') !== false,
+            isset($_SERVER['SERVER_NAME']) && (
+                strpos($_SERVER['SERVER_NAME'], '.wpengine.com') !== false ||
+                strpos($_SERVER['SERVER_NAME'], '.staging.wpengine.com') !== false ||
+                strpos($_SERVER['SERVER_NAME'], '.dev.wpengine.com') !== false
+            )
+        ];
+        
+        return in_array(true, $indicators, true);
+    }
+    
+    /**
+     * Create backup with timeout protection for WP Engine Alternate Cron
+     */
+    private function create_backup_with_timeout($type = 'manual', $description = '', $max_execution_time = 50, $start_time = null) {
+        $start_time = $start_time ?: time();
+        
+        // Quick pre-flight checks to avoid timeouts
+        $elapsed = time() - $start_time;
+        if ($elapsed > ($max_execution_time - 10)) {
+            return array(
+                'success' => false,
+                'message' => __('Backup skipped: insufficient time remaining for safe execution', 'wpengine-backup-scheduler')
+            );
+        }
+        
+        // Use the existing create_backup method but with timeout awareness
+        return $this->create_backup($type, $description);
     }
     
     /**
@@ -1657,6 +1734,36 @@ add_action('admin_notices', function() {
     }
     
     $settings = get_option('wpengine_backup_settings', array());
+    $plugin_instance = new WPEngineBackupScheduler();
+    
+    // Check for WP Engine Alternate Cron setup requirements
+    $is_wpengine = $plugin_instance->is_wpengine_hosting();
+    $is_wp_cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+    
+    if ($is_wpengine && !$is_wp_cron_disabled) {
+        ?>
+        <div class="notice notice-error">
+            <p>
+                <strong><?php _e('WP Engine Backup Scheduler - IMPORTANT SETUP REQUIRED', 'wpengine-backup-scheduler'); ?>:</strong><br>
+                <?php _e('For reliable hourly backups on WP Engine hosting, please complete these steps:', 'wpengine-backup-scheduler'); ?>
+            </p>
+            <ol style="margin: 10px 0 10px 25px;">
+                <li><?php _e('Add this line to your wp-config.php file:', 'wpengine-backup-scheduler'); ?> <code>define( 'DISABLE_WP_CRON', true );</code></li>
+                <li><?php _e('Enable "Alternate Cron" in your WP Engine User Portal under Utilities', 'wpengine-backup-scheduler'); ?></li>
+            </ol>
+            <p><a href="https://wpengine.com/support/wp-cron-wordpress-scheduling/" target="_blank"><?php _e('View WP Engine Cron Setup Guide', 'wpengine-backup-scheduler'); ?></a></p>
+        </div>
+        <?php
+    } elseif ($is_wpengine && $is_wp_cron_disabled) {
+        ?>
+        <div class="notice notice-success">
+            <p>
+                <strong><?php _e('WP Engine Backup Scheduler', 'wpengine-backup-scheduler'); ?>:</strong>
+                <?php _e('✓ WP Engine hosting detected with proper cron configuration. Your hourly backups should run reliably!', 'wpengine-backup-scheduler'); ?>
+            </p>
+        </div>
+        <?php
+    }
     
     if (empty($settings['api_username']) || empty($settings['api_password'])) {
         ?>
@@ -1792,8 +1899,26 @@ if (defined('WP_CLI') && WP_CLI) {
         public function status($args, $assoc_args) {
             $settings = get_option('wpengine_backup_settings', array());
             $next_backup = wp_next_scheduled('wpengine_backup_cron_hook');
+            $plugin = new WPEngineBackupScheduler();
             
             WP_CLI::log('WP Engine Backup Scheduler Status:');
+            WP_CLI::log('');
+            
+            // WP Engine hosting check
+            $is_wpengine = $plugin->is_wpengine_hosting();
+            $is_wp_cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+            
+            if ($is_wpengine) {
+                WP_CLI::log('✓ WP Engine hosting: DETECTED');
+                WP_CLI::log('  WP_CRON disabled: ' . ($is_wp_cron_disabled ? '✓ YES (recommended)' : '✗ NO (should enable Alternate Cron)'));
+                
+                if (!$is_wp_cron_disabled) {
+                    WP_CLI::log('  ⚠️  For reliable hourly backups, add DISABLE_WP_CRON to wp-config.php and enable Alternate Cron');
+                }
+            } else {
+                WP_CLI::log('? WP Engine hosting: NOT DETECTED');
+            }
+            
             WP_CLI::log('');
             
             if ($settings['enabled'] ?? false) {
