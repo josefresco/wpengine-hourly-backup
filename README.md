@@ -44,6 +44,28 @@ A WordPress plugin that provides automated backup scheduling for WP Engine hoste
 
 ## Quick Setup
 
+### ⚠️ **IMPORTANT: For Reliable Hourly Backups on WP Engine**
+
+**WP Engine Hosting requires additional setup for reliable hourly scheduling:**
+
+1. **Add to your wp-config.php file:**
+   ```php
+   define( 'DISABLE_WP_CRON', true );
+   ```
+
+2. **Enable WP Engine Alternate Cron:**
+   - Log into your WP Engine User Portal
+   - Select your site environment
+   - Navigate to **"Utilities"**
+   - Toggle the **"Alternate Cron"** switch to ON
+
+3. **Why This Is Required:**
+   - Standard WordPress cron only runs on page visits
+   - WP Engine's Alternate Cron runs every minute as a true server-side cron
+   - This ensures your hourly backups execute reliably regardless of site traffic
+
+### **Plugin Configuration**
+
 1. **Enable WP Engine API Access**
    - Log into your WP Engine User Portal
    - Go to **Account Settings > API Access**
@@ -60,6 +82,8 @@ A WordPress plugin that provides automated backup scheduling for WP Engine hoste
    - Use **Test API Connection** to verify credentials
    - Create a manual backup to ensure everything works
    - Enable automatic backups if desired
+
+The plugin will automatically detect WP Engine hosting and show setup reminders if Alternate Cron is not properly configured.
 
 ## Configuration
 
@@ -175,6 +199,33 @@ Content-Type: application/json
 ```
 
 ## Troubleshooting
+
+### WP Engine Cron Issues (Most Important)
+
+**Hourly Backups Not Running**
+1. **Check if WP Engine Alternate Cron is enabled:**
+   - WP Engine User Portal → Utilities → Alternate Cron (toggle ON)
+2. **Verify wp-config.php has:**
+   ```php
+   define( 'DISABLE_WP_CRON', true );
+   ```
+3. **Use WP-CLI to check status:**
+   ```bash
+   wp wpengine-backup status
+   ```
+4. **Monitor access logs for wp-cron.php requests:**
+   - Look for regular requests every minute to wp-cron.php
+   - Check for 200 (success) vs 502 (timeout) response codes
+
+**Cron Timeouts (502 Errors)**
+- WP Engine Alternate Cron has a 60-second timeout limit
+- The plugin includes timeout protection (50-second limit)
+- Check error logs for timeout messages
+
+**Missed Backup Events**
+- Standard wp-cron only runs on page visits (unreliable)
+- WP Engine Alternate Cron runs every minute (reliable)
+- Enable Alternate Cron to fix this issue
 
 ### Common Issues
 
