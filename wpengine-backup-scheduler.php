@@ -3,7 +3,7 @@
  * Plugin Name: WP Engine Backup Scheduler
  * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
- * Version: 1.1.2
+ * Version: 1.1.3
  * Author: josefresco
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
@@ -23,7 +23,7 @@ if (!defined('WPENGINE_BACKUP_PLUGIN_PATH')) {
     define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
 }
 if (!defined('WPENGINE_BACKUP_VERSION')) {
-    define('WPENGINE_BACKUP_VERSION', '1.1.2');
+    define('WPENGINE_BACKUP_VERSION', '1.1.3');
 }
 
 /**
@@ -478,7 +478,7 @@ class WPEngineBackupScheduler {
                                 </div>
                             <?php endif; ?>
                             
-                            <form id="wpengine-api-settings" class="<?php echo $has_api_credentials ? 'collapsed' : ''; ?>">
+                            <form id="wpengine-api-settings">
                                 <table class="form-table">
                                     <tr>
                                         <th scope="row">
@@ -509,12 +509,12 @@ class WPEngineBackupScheduler {
                                 
                                 <?php if ($has_api_credentials) : ?>
                                     <div class="step-completed-actions">
-                                        <button type="button" class="button-secondary" onclick="toggleStepEdit(1)">
-                                            <?php _e('Edit Credentials', 'wpengine-backup-scheduler'); ?>
-                                        </button>
                                         <button type="button" id="test-api-connection" class="button">
                                             <?php _e('Test Connection', 'wpengine-backup-scheduler'); ?>
                                         </button>
+                                        <span class="success-indicator" style="color: #46b450; margin-left: 10px;">
+                                            <?php _e('✅ Credentials Saved', 'wpengine-backup-scheduler'); ?>
+                                        </span>
                                     </div>
                                 <?php endif; ?>
                             </form>
@@ -552,7 +552,7 @@ class WPEngineBackupScheduler {
                                     </div>
                                 <?php endif; ?>
                                 
-                                <form id="wpengine-install-settings" class="<?php echo $has_install_config ? 'collapsed' : ''; ?>">
+                                <form id="wpengine-install-settings">
                                     <div class="install-auto-detect">
                                         <button type="button" id="auto-detect-install-btn" class="button button-primary">
                                             <?php _e('Auto-Detect & Configure Current Install', 'wpengine-backup-scheduler'); ?>
@@ -602,9 +602,9 @@ class WPEngineBackupScheduler {
                                                     <td>
                                                         <strong><?php echo esc_html($settings['install_name'] ?? 'Unknown'); ?></strong> 
                                                         (ID: <?php echo esc_html($settings['install_id'] ?? 'Unknown'); ?>)
-                                                        <button type="button" class="button-secondary" onclick="toggleStepEdit(2)" style="margin-left: 10px;">
-                                                            <?php _e('Change Install', 'wpengine-backup-scheduler'); ?>
-                                                        </button>
+                                                        <span class="success-indicator" style="color: #46b450; margin-left: 10px;">
+                                                            <?php _e('✅ Install Configured', 'wpengine-backup-scheduler'); ?>
+                                                        </span>
                                                     </td>
                                                 </tr>
                                             </table>
@@ -630,7 +630,7 @@ class WPEngineBackupScheduler {
                                     <p><?php _e('Complete the previous steps first to configure email notifications and scheduling.', 'wpengine-backup-scheduler'); ?></p>
                                 </div>
                             <?php else : ?>
-                                <form id="wpengine-email-schedule-settings" class="<?php echo ($has_email_config && $is_enabled) ? 'collapsed' : ''; ?>">
+                                <form id="wpengine-email-schedule-settings">
                                     <div class="form-section">
                                         <h3><?php _e('Email Notifications', 'wpengine-backup-scheduler'); ?> <span class="required">*</span></h3>
                                         <p class="section-description"><?php _e('Email notifications are required by the WP Engine API for backup completion.', 'wpengine-backup-scheduler'); ?></p>
@@ -682,9 +682,9 @@ class WPEngineBackupScheduler {
                                     
                                     <?php if ($has_email_config) : ?>
                                         <div class="step-completed-actions">
-                                            <button type="button" class="button-secondary" onclick="toggleStepEdit(3)">
-                                                <?php _e('Edit Configuration', 'wpengine-backup-scheduler'); ?>
-                                            </button>
+                                            <span class="success-indicator" style="color: #46b450;">
+                                                <?php _e('✅ Email & Schedule Configured', 'wpengine-backup-scheduler'); ?>
+                                            </span>
                                         </div>
                                     <?php endif; ?>
                                 </form>
@@ -757,9 +757,6 @@ class WPEngineBackupScheduler {
                                         <div class="management-actions">
                                             <button type="button" id="create-manual-backup-btn" class="button button-primary">
                                                 <?php _e('Create Manual Backup', 'wpengine-backup-scheduler'); ?>
-                                            </button>
-                                            <button type="button" class="button-secondary" onclick="toggleStepEdit(4)">
-                                                <?php _e('Change Settings', 'wpengine-backup-scheduler'); ?>
                                             </button>
                                             <button type="button" id="disable-backups-btn" class="button-secondary">
                                                 <?php _e('Disable Backups', 'wpengine-backup-scheduler'); ?>
@@ -1149,10 +1146,7 @@ class WPEngineBackupScheduler {
             color: #6c757d;
         }
         
-        /* Collapsed form state */
-        .setup-step.completed form.collapsed {
-            display: none;
-        }
+        /* Forms are now always editable - collapsed state removed */
         
         .current-config {
             background: #f0f6fc;
@@ -2531,12 +2525,11 @@ add_action('admin_footer', function() {
                 api_password: $('input[name="api_password"]').val()
             }, function(response) {
                 if (response.success) {
-                    $result.addClass('status-success').text('<?php _e('API credentials saved and tested successfully!', 'wpengine-backup-scheduler'); ?>');
+                    $result.addClass('status-success').text('<?php _e('✅ API credentials saved and tested successfully!', 'wpengine-backup-scheduler'); ?>');
                     
-                    // Mark step 1 as completed and refresh page to update UI state
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1500);
+                    // Show success notification without page reload
+                    $('<div class="notice notice-success is-dismissible"><p>' + response.data + '</p></div>')
+                        .insertAfter('.wrap h1').delay(4000).fadeOut();
                 } else {
                     $result.addClass('status-error').text(response.data);
                 }
@@ -2568,12 +2561,11 @@ add_action('admin_footer', function() {
                 backup_frequency: $('select[name="backup_frequency"]').val()
             }, function(response) {
                 if (response.success) {
-                    $status.addClass('status-success').text('<?php _e('Configuration saved successfully!', 'wpengine-backup-scheduler'); ?>');
+                    $status.addClass('status-success').text('<?php _e('✅ Configuration saved successfully!', 'wpengine-backup-scheduler'); ?>');
                     
-                    // Mark step 3 as completed and refresh page
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1500);
+                    // Show success notification without page reload
+                    $('<div class="notice notice-success is-dismissible"><p>' + response.data + '</p></div>')
+                        .insertAfter('.wrap h1').delay(4000).fadeOut();
                 } else {
                     $status.addClass('status-error').text(response.data);
                 }
@@ -2714,23 +2706,7 @@ add_action('admin_footer', function() {
             }
         };
         
-        // Toggle step editing mode
-        window.toggleStepEdit = function(stepNumber) {
-            var $step = $('.step-' + stepNumber);
-            var $form = $step.find('form');
-            var $completedActions = $step.find('.step-completed-actions');
-            var $currentConfig = $step.find('.current-config');
-            
-            if ($form.hasClass('collapsed')) {
-                $form.removeClass('collapsed').slideDown();
-                $completedActions.hide();
-                $currentConfig.hide();
-            } else {
-                $form.addClass('collapsed').slideUp();
-                $completedActions.show();
-                $currentConfig.show();
-            }
-        };
+        // Note: toggleStepEdit function removed - forms are now always editable
         
     });
     </script>
