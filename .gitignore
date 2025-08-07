@@ -4,6 +4,11 @@ OLLAMA.md
 *.local
 .env*
 
+# GitHub CLI and release tools
+gh_*/
+release-helper.sh
+setup-github-cli.sh
+
 # WordPress specific files
 wp-config.php
 wp-content/uploads/
