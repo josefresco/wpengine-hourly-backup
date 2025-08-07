@@ -4,7 +4,7 @@ A WordPress plugin that provides automated backup scheduling for WP Engine hoste
 
 ![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)
-![License](https://img.shields.io/badge/License-GPL%20v2%2B-green.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## Features
 
@@ -318,19 +318,17 @@ CREATE TABLE wp_wpengine_backup_logs (
 
 ## License
 
-This plugin is licensed under the GPL v2 or later.
+This plugin is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-```
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+**MIT License Summary:**
+- ✅ Commercial use allowed
+- ✅ Modification allowed  
+- ✅ Distribution allowed
+- ✅ Private use allowed
+- ❌ No warranty provided
+- ❌ No liability accepted
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-```
+Copyright (c) 2025 josefresco
 
 ## Changelog
 
