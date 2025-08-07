@@ -40,6 +40,9 @@ class WPEngineBackupScheduler {
         add_action('wp_ajax_wpengine_auto_detect_install', array($this, 'ajax_auto_detect_install'));
         add_action('wp_ajax_wpengine_debug_settings', array($this, 'ajax_debug_settings'));
         add_action('wp_ajax_wpengine_cancel_schedule', array($this, 'ajax_cancel_schedule'));
+        add_action('wp_ajax_wpengine_debug_cron', array($this, 'ajax_debug_cron'));
+        add_action('wp_ajax_wpengine_test_backup', array($this, 'ajax_test_backup'));
+        add_action('wp_ajax_wpengine_trigger_cron', array($this, 'ajax_trigger_cron'));
         
         // Hook for scheduled backups
         add_action('wpengine_backup_cron_hook', array($this, 'execute_scheduled_backup'));
@@ -628,6 +631,20 @@ class WPEngineBackupScheduler {
                         </div>
                     </div>
                     
+                    <!-- Debug Panel -->
+                    <div class="postbox">
+                        <h2 class="hndle"><?php _e('Debug & Testing', 'wpengine-backup-scheduler'); ?></h2>
+                        <div class="inside">
+                            <p><?php _e('Use these tools to diagnose why hourly backups might not be running:', 'wpengine-backup-scheduler'); ?></p>
+                            
+                            <button type="button" id="debug-cron-btn" class="button"><?php _e('Run Cron Diagnostics', 'wpengine-backup-scheduler'); ?></button>
+                            <button type="button" id="test-backup-btn" class="button"><?php _e('Test Backup Now', 'wpengine-backup-scheduler'); ?></button>
+                            <button type="button" id="trigger-cron-btn" class="button"><?php _e('Trigger Cron Function', 'wpengine-backup-scheduler'); ?></button>
+                            
+                            <div id="debug-panel" style="display: none; margin-top: 15px; padding: 15px; background: #f0f0f0; border: 1px solid #ddd; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    
                     <!-- Help -->
                     <div class="postbox">
                         <h2 class="hndle"><?php _e('Help & Documentation', 'wpengine-backup-scheduler'); ?></h2>
@@ -770,6 +787,103 @@ class WPEngineBackupScheduler {
         }
         
         wp_send_json_success($settings);
+    }
+    
+    /**
+     * AJAX handler for comprehensive cron debugging
+     */
+    public function ajax_debug_cron() {
+        check_ajax_referer('wpengine_backup_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wpengine-backup-scheduler'));
+        }
+        
+        // Generate debug report
+        $settings = get_option('wpengine_backup_settings', array());
+        $is_wpengine = $this->is_wpengine_hosting();
+        $is_wp_cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+        $next_backup = wp_next_scheduled('wpengine_backup_cron_hook');
+        
+        $debug_info = array(
+            'environment' => array(
+                'wp_engine_detected' => $is_wpengine,
+                'wp_cron_disabled' => $is_wp_cron_disabled,
+                'wordpress_version' => get_bloginfo('version'),
+                'php_version' => PHP_VERSION
+            ),
+            'configuration' => array(
+                'api_username_set' => !empty($settings['api_username']),
+                'api_password_set' => !empty($settings['api_password']),
+                'install_id' => $settings['install_id'] ?? null,
+                'email_notifications' => $settings['email_notifications'] ?? null,
+                'backups_enabled' => $settings['enabled'] ?? false,
+                'frequency' => ($settings['backup_frequency'] ?? 'not set') . ' hours'
+            ),
+            'cron_status' => array(
+                'next_backup_timestamp' => $next_backup,
+                'next_backup_formatted' => $next_backup ? date('Y-m-d H:i:s', $next_backup) : null,
+                'time_until_next' => $next_backup ? ($next_backup - time()) : null,
+                'backup_running' => get_transient('wpengine_backup_running') ? true : false
+            ),
+            'recent_activity' => $this->get_recent_backup_logs(5)
+        );
+        
+        // Test API if credentials available
+        if (!empty($settings['api_username']) && !empty($settings['api_password'])) {
+            $api_test = $this->test_api_connection($settings['api_username'], $settings['api_password']);
+            $debug_info['api_test'] = $api_test;
+        } else {
+            $debug_info['api_test'] = array('success' => false, 'message' => 'No credentials configured');
+        }
+        
+        wp_send_json_success($debug_info);
+    }
+    
+    /**
+     * AJAX handler for testing backup functionality
+     */
+    public function ajax_test_backup() {
+        check_ajax_referer('wpengine_backup_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wpengine-backup-scheduler'));
+        }
+        
+        $description = 'Admin panel test backup - ' . current_time('Y-m-d H:i:s');
+        $result = $this->create_backup('manual', $description);
+        
+        if ($result['success']) {
+            wp_send_json_success($result['message'] . (isset($result['backup_id']) ? ' (ID: ' . $result['backup_id'] . ')' : ''));
+        } else {
+            wp_send_json_error($result['message']);
+        }
+    }
+    
+    /**
+     * AJAX handler for manually triggering cron function
+     */
+    public function ajax_trigger_cron() {
+        check_ajax_referer('wpengine_backup_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wpengine-backup-scheduler'));
+        }
+        
+        // Check if backup is already running
+        $running_transient = get_transient('wpengine_backup_running');
+        if ($running_transient) {
+            wp_send_json_error(__('A backup is already running. Please wait for it to complete.', 'wpengine-backup-scheduler'));
+            return;
+        }
+        
+        $result = $this->execute_scheduled_backup();
+        
+        if ($result !== false) {
+            wp_send_json_success(__('Scheduled backup function executed successfully. Check backup logs for details.', 'wpengine-backup-scheduler'));
+        } else {
+            wp_send_json_error(__('Scheduled backup function returned an error. Check logs for details.', 'wpengine-backup-scheduler'));
+        }
     }
     
     /**
@@ -995,7 +1109,7 @@ class WPEngineBackupScheduler {
     /**
      * Test API connection
      */
-    private function test_api_connection($username, $password) {
+    public function test_api_connection($username, $password) {
         if (empty($username) || empty($password)) {
             return array(
                 'success' => false,
@@ -1711,6 +1825,133 @@ add_action('admin_footer', function() {
         $(document).on('click', '.notice-dismissible .notice-dismiss', function() {
             $(this).parent().fadeOut();
         });
+        
+        // Debug Panel Functions
+        $('#debug-cron-btn').on('click', function() {
+            var $btn = $(this);
+            var $panel = $('#debug-panel');
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Running Diagnostics...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_debug_cron',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                if (response.success) {
+                    var data = response.data;
+                    var html = '<strong>🔍 CRON DEBUG REPORT</strong><br><br>';
+                    
+                    // Environment
+                    html += '<strong>Environment:</strong><br>';
+                    html += '  WP Engine: ' + (data.environment.wp_engine_detected ? '✅ Detected' : '❌ Not detected') + '<br>';
+                    html += '  WP_CRON disabled: ' + (data.environment.wp_cron_disabled ? '✅ Yes (good)' : '❌ No (problem)') + '<br>';
+                    html += '  WordPress: ' + data.environment.wordpress_version + '<br>';
+                    html += '  PHP: ' + data.environment.php_version + '<br><br>';
+                    
+                    // Configuration
+                    html += '<strong>Configuration:</strong><br>';
+                    html += '  API Username: ' + (data.configuration.api_username_set ? '✅ Set' : '❌ Missing') + '<br>';
+                    html += '  API Password: ' + (data.configuration.api_password_set ? '✅ Set' : '❌ Missing') + '<br>';
+                    html += '  Install ID: ' + (data.configuration.install_id ? '✅ ' + data.configuration.install_id : '❌ Missing') + '<br>';
+                    html += '  Email: ' + (data.configuration.email_notifications ? '✅ ' + data.configuration.email_notifications : '❌ Missing') + '<br>';
+                    html += '  Enabled: ' + (data.configuration.backups_enabled ? '✅ Yes' : '❌ No') + '<br>';
+                    html += '  Frequency: ' + data.configuration.frequency + '<br><br>';
+                    
+                    // Cron Status
+                    html += '<strong>Cron Status:</strong><br>';
+                    if (data.cron_status.next_backup_formatted) {
+                        html += '  Next backup: ✅ ' + data.cron_status.next_backup_formatted + '<br>';
+                        var timeUntil = data.cron_status.time_until_next;
+                        if (timeUntil > 0) {
+                            var hours = Math.floor(timeUntil / 3600);
+                            var minutes = Math.floor((timeUntil % 3600) / 60);
+                            html += '  Time until: ' + hours + 'h ' + minutes + 'm<br>';
+                        } else {
+                            html += '  Status: ⚠️ OVERDUE by ' + Math.abs(Math.floor(timeUntil / 60)) + ' minutes<br>';
+                        }
+                    } else {
+                        html += '  Next backup: ❌ NO CRON EVENT SCHEDULED<br>';
+                    }
+                    html += '  Backup running: ' + (data.cron_status.backup_running ? '⏳ Yes' : '❌ No') + '<br><br>';
+                    
+                    // API Test
+                    html += '<strong>API Test:</strong><br>';
+                    html += '  Result: ' + (data.api_test.success ? '✅ ' + data.api_test.message : '❌ ' + data.api_test.message) + '<br><br>';
+                    
+                    // Recent Activity
+                    html += '<strong>Recent Activity:</strong><br>';
+                    if (data.recent_activity && data.recent_activity.length > 0) {
+                        data.recent_activity.forEach(function(log) {
+                            var icon = log.status === 'success' ? '✅' : (log.status === 'error' ? '❌' : '⏳');
+                            html += '  ' + icon + ' ' + log.created_at + ' - ' + log.backup_type + ' (' + log.status + ')<br>';
+                        });
+                    } else {
+                        html += '  ❌ No activity found<br>';
+                    }
+                    
+                    $panel.html(html).show();
+                } else {
+                    $panel.html('<strong>Error:</strong> ' + response.data).show();
+                }
+            }).fail(function() {
+                $panel.html('<strong>Error:</strong> Failed to run diagnostics').show();
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        $('#test-backup-btn').on('click', function() {
+            var $btn = $(this);
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Creating Test Backup...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_test_backup',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                var message = response.success ? 
+                    '✅ Test backup successful: ' + response.data : 
+                    '❌ Test backup failed: ' + response.data;
+                    
+                $('#debug-panel').html('<strong>' + message + '</strong>').show();
+                
+                // Reload page after a delay to show new backup in logs
+                if (response.success) {
+                    setTimeout(function() { location.reload(); }, 2000);
+                }
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        $('#trigger-cron-btn').on('click', function() {
+            var $btn = $(this);
+            var originalText = $btn.text();
+            
+            if (!confirm('<?php _e('This will manually trigger the scheduled backup function. Continue?', 'wpengine-backup-scheduler'); ?>')) {
+                return;
+            }
+            
+            $btn.prop('disabled', true).text('<?php _e('Triggering...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_trigger_cron',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                var message = response.success ? 
+                    '✅ ' + response.data : 
+                    '❌ ' + response.data;
+                    
+                $('#debug-panel').html('<strong>' + message + '</strong>').show();
+                
+                // Reload page after a delay to show results
+                setTimeout(function() { location.reload(); }, 3000);
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
     });
     </script>
     <?php
@@ -2027,6 +2268,278 @@ if (defined('WP_CLI') && WP_CLI) {
                 WP_CLI::log('Environment: ' . $result['environment']);
             } else {
                 WP_CLI::error($result['message']);
+            }
+        }
+        
+        /**
+         * Debug cron and backup configuration issues
+         *
+         * ## OPTIONS
+         *
+         * [--verbose]
+         * : Show detailed debugging information
+         *
+         * ## EXAMPLES
+         *
+         *     wp wpengine-backup debug
+         *     wp wpengine-backup debug --verbose
+         */
+        public function debug($args, $assoc_args) {
+            $verbose = isset($assoc_args['verbose']);
+            $plugin = new WPEngineBackupScheduler();
+            
+            WP_CLI::log('=== WP Engine Backup Scheduler Debug Report ===');
+            WP_CLI::log('');
+            
+            // 1. Environment Check
+            WP_CLI::log('🔍 ENVIRONMENT CHECK:');
+            $is_wpengine = $plugin->is_wpengine_hosting();
+            $is_wp_cron_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+            
+            WP_CLI::log('  WP Engine hosting: ' . ($is_wpengine ? '✅ DETECTED' : '❌ NOT DETECTED'));
+            WP_CLI::log('  DISABLE_WP_CRON: ' . ($is_wp_cron_disabled ? '✅ TRUE (good)' : '❌ FALSE (problem)'));
+            WP_CLI::log('  WordPress version: ' . get_bloginfo('version'));
+            WP_CLI::log('  PHP version: ' . PHP_VERSION);
+            WP_CLI::log('');
+            
+            // 2. Plugin Configuration
+            WP_CLI::log('⚙️  PLUGIN CONFIGURATION:');
+            $settings = get_option('wpengine_backup_settings', array());
+            
+            WP_CLI::log('  API Username: ' . (!empty($settings['api_username']) ? '✅ SET' : '❌ MISSING'));
+            WP_CLI::log('  API Password: ' . (!empty($settings['api_password']) ? '✅ SET' : '❌ MISSING'));
+            WP_CLI::log('  Install ID: ' . (!empty($settings['install_id']) ? '✅ ' . $settings['install_id'] : '❌ MISSING'));
+            WP_CLI::log('  Email Notifications: ' . (!empty($settings['email_notifications']) ? '✅ ' . $settings['email_notifications'] : '❌ MISSING'));
+            WP_CLI::log('  Backups Enabled: ' . (($settings['enabled'] ?? false) ? '✅ YES' : '❌ NO'));
+            WP_CLI::log('  Frequency: ' . ($settings['backup_frequency'] ?? 'not set') . ' hours');
+            WP_CLI::log('');
+            
+            // 3. Cron Status
+            WP_CLI::log('⏰ CRON STATUS:');
+            $next_backup = wp_next_scheduled('wpengine_backup_cron_hook');
+            
+            if ($next_backup) {
+                $time_until = $next_backup - time();
+                WP_CLI::log('  Next backup scheduled: ✅ ' . date('Y-m-d H:i:s', $next_backup));
+                WP_CLI::log('  Time until next backup: ' . ($time_until > 0 ? gmdate('H:i:s', $time_until) : 'OVERDUE by ' . gmdate('H:i:s', abs($time_until))));
+            } else {
+                WP_CLI::log('  Next backup scheduled: ❌ NO CRON EVENT FOUND');
+            }
+            
+            // Get all scheduled events for our hook
+            $cron_array = _get_cron_array();
+            $our_events = array();
+            foreach ($cron_array as $timestamp => $cron) {
+                if (isset($cron['wpengine_backup_cron_hook'])) {
+                    $our_events[] = array('time' => $timestamp, 'data' => $cron['wpengine_backup_cron_hook']);
+                }
+            }
+            
+            WP_CLI::log('  Scheduled events found: ' . count($our_events));
+            if ($verbose && !empty($our_events)) {
+                foreach ($our_events as $event) {
+                    WP_CLI::log('    - ' . date('Y-m-d H:i:s', $event['time']));
+                }
+            }
+            WP_CLI::log('');
+            
+            // 4. Recent Backup Activity
+            WP_CLI::log('📋 RECENT BACKUP ACTIVITY:');
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'wpengine_backup_logs';
+            $recent_logs = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM $table_name ORDER BY created_at DESC LIMIT %d",
+                $verbose ? 10 : 5
+            ));
+            
+            if ($recent_logs) {
+                foreach ($recent_logs as $log) {
+                    $icon = $log->status === 'success' ? '✅' : ($log->status === 'error' ? '❌' : '⏳');
+                    WP_CLI::log('  ' . $icon . ' ' . $log->created_at . ' - ' . ucfirst($log->backup_type) . ' (' . $log->status . ')');
+                    if ($verbose && $log->message) {
+                        WP_CLI::log('      Message: ' . $log->message);
+                    }
+                }
+            } else {
+                WP_CLI::log('  ❌ No backup activity found');
+            }
+            WP_CLI::log('');
+            
+            // 5. Test API Connection
+            WP_CLI::log('🔌 API CONNECTION TEST:');
+            if (!empty($settings['api_username']) && !empty($settings['api_password'])) {
+                $test_result = $plugin->test_api_connection($settings['api_username'], $settings['api_password']);
+                WP_CLI::log('  API Test: ' . ($test_result['success'] ? '✅ ' . $test_result['message'] : '❌ ' . $test_result['message']));
+            } else {
+                WP_CLI::log('  API Test: ❌ Cannot test - credentials missing');
+            }
+            WP_CLI::log('');
+            
+            // 6. Check for running backup
+            WP_CLI::log('🚀 CURRENT BACKUP STATUS:');
+            $running_transient = get_transient('wpengine_backup_running');
+            if ($running_transient) {
+                $running_since = time() - $running_transient;
+                WP_CLI::log('  Backup currently running: ⏳ Started ' . gmdate('H:i:s', $running_since) . ' ago');
+            } else {
+                WP_CLI::log('  Backup currently running: ❌ No');
+            }
+            WP_CLI::log('');
+            
+            // 7. Recommendations
+            WP_CLI::log('💡 RECOMMENDATIONS:');
+            $issues = array();
+            
+            if (!$is_wpengine) {
+                $issues[] = 'Not running on WP Engine hosting - this plugin is designed for WP Engine';
+            }
+            
+            if (!$is_wp_cron_disabled) {
+                $issues[] = 'Add "define( \'DISABLE_WP_CRON\', true );" to wp-config.php';
+                $issues[] = 'Enable Alternate Cron in WP Engine User Portal → Utilities';
+            }
+            
+            if (empty($settings['api_username']) || empty($settings['api_password'])) {
+                $issues[] = 'Configure API credentials in plugin settings';
+            }
+            
+            if (empty($settings['install_id'])) {
+                $issues[] = 'Use "Auto-Detect & Configure Current Install" in plugin settings';
+            }
+            
+            if (empty($settings['email_notifications'])) {
+                $issues[] = 'Add email notification address (required by WP Engine API)';
+            }
+            
+            if (!($settings['enabled'] ?? false)) {
+                $issues[] = 'Enable automatic backups in plugin settings';
+            }
+            
+            if (!$next_backup && ($settings['enabled'] ?? false)) {
+                $issues[] = 'No cron event scheduled - try saving settings again';
+            }
+            
+            if (empty($issues)) {
+                WP_CLI::success('✅ No configuration issues found!');
+                if (!empty($recent_logs)) {
+                    $latest = $recent_logs[0];
+                    if ($latest->status === 'error') {
+                        WP_CLI::log('  However, the latest backup failed. Check the error message above.');
+                    }
+                } else {
+                    WP_CLI::log('  Try running: wp wpengine-backup test');
+                }
+            } else {
+                foreach ($issues as $issue) {
+                    WP_CLI::log('  ⚠️  ' . $issue);
+                }
+            }
+            
+            WP_CLI::log('');
+            WP_CLI::log('=== End Debug Report ===');
+        }
+        
+        /**
+         * Test the backup system by manually triggering a backup
+         *
+         * ## OPTIONS
+         *
+         * [--description=<description>]
+         * : Description for the test backup
+         *
+         * ## EXAMPLES
+         *
+         *     wp wpengine-backup test
+         *     wp wpengine-backup test --description="Debug test backup"
+         */
+        public function test($args, $assoc_args) {
+            $plugin = new WPEngineBackupScheduler();
+            $description = $assoc_args['description'] ?? 'WP-CLI test backup';
+            
+            WP_CLI::log('🧪 Testing backup system...');
+            WP_CLI::log('');
+            
+            // Check configuration first
+            $settings = get_option('wpengine_backup_settings', array());
+            $issues = array();
+            
+            if (empty($settings['api_username']) || empty($settings['api_password'])) {
+                $issues[] = 'API credentials not configured';
+            }
+            
+            if (empty($settings['install_id'])) {
+                $issues[] = 'Install ID not configured';
+            }
+            
+            if (empty($settings['email_notifications'])) {
+                $issues[] = 'Email notifications not configured';
+            }
+            
+            if (!empty($issues)) {
+                WP_CLI::error('Cannot run test - configuration issues found:' . "\n  - " . implode("\n  - ", $issues));
+                return;
+            }
+            
+            WP_CLI::log('Configuration check: ✅ Passed');
+            WP_CLI::log('Creating test backup...');
+            
+            $result = $plugin->create_backup('manual', $description);
+            
+            if ($result['success']) {
+                WP_CLI::success('✅ Test backup created successfully!');
+                WP_CLI::log('Message: ' . $result['message']);
+                if (isset($result['backup_id'])) {
+                    WP_CLI::log('Backup ID: ' . $result['backup_id']);
+                }
+            } else {
+                WP_CLI::error('❌ Test backup failed: ' . $result['message']);
+            }
+        }
+        
+        /**
+         * Manually trigger the scheduled backup function for testing
+         *
+         * ## EXAMPLES
+         *
+         *     wp wpengine-backup trigger-cron
+         */
+        public function trigger_cron($args, $assoc_args) {
+            $plugin = new WPEngineBackupScheduler();
+            
+            WP_CLI::log('🔧 Manually triggering scheduled backup function...');
+            WP_CLI::log('');
+            
+            // Check if backup is already running
+            $running_transient = get_transient('wpengine_backup_running');
+            if ($running_transient) {
+                WP_CLI::warning('A backup appears to be already running (started ' . gmdate('H:i:s', time() - $running_transient) . ' ago)');
+                WP_CLI::confirm('Continue anyway?');
+            }
+            
+            WP_CLI::log('Executing scheduled backup function...');
+            
+            $result = $plugin->execute_scheduled_backup();
+            
+            if ($result !== false) {
+                WP_CLI::success('✅ Scheduled backup function executed');
+                WP_CLI::log('Check the backup logs for results');
+            } else {
+                WP_CLI::error('❌ Scheduled backup function returned false');
+            }
+            
+            // Show recent logs
+            WP_CLI::log('');
+            WP_CLI::log('Recent backup activity:');
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'wpengine_backup_logs';
+            $recent_logs = $wpdb->get_results("SELECT * FROM $table_name ORDER BY created_at DESC LIMIT 3");
+            
+            foreach ($recent_logs as $log) {
+                $icon = $log->status === 'success' ? '✅' : ($log->status === 'error' ? '❌' : '⏳');
+                WP_CLI::log('  ' . $icon . ' ' . $log->created_at . ' - ' . ucfirst($log->backup_type) . ' (' . $log->status . ')');
+                if ($log->message) {
+                    WP_CLI::log('      ' . $log->message);
+                }
             }
         }
     }

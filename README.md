@@ -164,6 +164,21 @@ wp wpengine-backup toggle disable
 wp wpengine-backup detect
 ```
 
+### Debug Cron Issues (NEW!)
+```bash
+# Comprehensive diagnostics report
+wp wpengine-backup debug
+
+# Verbose debug output
+wp wpengine-backup debug --verbose
+
+# Test backup functionality
+wp wpengine-backup test --description="Debug test"
+
+# Manually trigger cron function
+wp wpengine-backup trigger-cron
+```
+
 ## REST API Endpoints
 
 ### Get Backup Status
@@ -203,17 +218,23 @@ Content-Type: application/json
 ### WP Engine Cron Issues (Most Important)
 
 **Hourly Backups Not Running**
-1. **Check if WP Engine Alternate Cron is enabled:**
+1. **Use the new debug tools (RECOMMENDED):**
+   - **Admin Panel**: Go to **Tools > WP Engine Backups** → **Debug & Testing** section
+   - **WP-CLI**: Run `wp wpengine-backup debug` for comprehensive diagnostics
+   
+2. **Check if WP Engine Alternate Cron is enabled:**
    - WP Engine User Portal → Utilities → Alternate Cron (toggle ON)
-2. **Verify wp-config.php has:**
+   
+3. **Verify wp-config.php has:**
    ```php
    define( 'DISABLE_WP_CRON', true );
    ```
-3. **Use WP-CLI to check status:**
-   ```bash
-   wp wpengine-backup status
-   ```
-4. **Monitor access logs for wp-cron.php requests:**
+   
+4. **Test manually:**
+   - Admin Panel: Click **"Test Backup Now"** or **"Trigger Cron Function"**  
+   - WP-CLI: `wp wpengine-backup test` or `wp wpengine-backup trigger-cron`
+   
+5. **Monitor access logs for wp-cron.php requests:**
    - Look for regular requests every minute to wp-cron.php
    - Check for 200 (success) vs 502 (timeout) response codes
 
