@@ -8,16 +8,26 @@ A WordPress plugin that provides automated backup scheduling for WP Engine hoste
 
 ## Features
 
+### 🚀 **Easy Setup & Management**
+- **Step-by-Step Onboarding**: Guided 4-step setup process for effortless configuration
+- **Visual Progress Indicators**: Clear progress tracking with status badges and completion checkmarks
+- **Always Editable**: Modify API credentials, install settings, and schedules anytime after saving
+- **Auto-Detection**: Automatically detects current WP Engine install and configuration
+- **Direct API Access Link**: One-click access to WP Engine API settings portal
+
+### 🔄 **Backup Operations** 
 - **Automated Scheduling**: Schedule backups to run automatically every 1-24 hours
 - **Manual Backups**: Create on-demand backups with custom descriptions
 - **WP Engine Integration**: Uses official WP Engine API for reliable backup creation
-- **Auto-Detection**: Automatically detects current WP Engine install and configuration
 - **Activity Logging**: Comprehensive backup activity tracking and status monitoring
 - **Email Notifications**: Required email notifications for backup completion (WP Engine API requirement)
+
+### 🛠️ **Advanced Features**
 - **Dashboard Widget**: Quick backup status overview in WordPress admin dashboard
-- **WP-CLI Support**: Command-line interface for backup management
+- **WP-CLI Support**: Command-line interface for backup management and debugging
 - **REST API**: RESTful endpoints for external integrations
 - **Multi-Environment Support**: Works with production, staging, and development environments
+- **Mobile Responsive**: Works perfectly on all devices with responsive design
 
 ## Requirements
 
@@ -64,26 +74,38 @@ A WordPress plugin that provides automated backup scheduling for WP Engine hoste
    - WP Engine's Alternate Cron runs every minute as a true server-side cron
    - This ensures your hourly backups execute reliably regardless of site traffic
 
-### **Plugin Configuration**
+### **Plugin Configuration** 🎯
 
-1. **Enable WP Engine API Access**
-   - Log into your WP Engine User Portal
-   - Go to **Account Settings > API Access**
-   - Generate API credentials (username and password)
+The plugin features a **guided 4-step onboarding process** that makes setup effortless:
 
-2. **Configure the Plugin**
-   - Go to **Tools > WP Engine Backups** in WordPress admin
-   - Enter your API credentials
-   - Click **Auto-Detect & Configure Current Install**
-   - Add your notification email address
-   - Configure your backup schedule
+**Step 1: API Credentials**
+- Go to **Tools > WP Engine Backups** in WordPress admin
+- Click the **"Open WP Engine API Settings →"** button (direct link to your portal)
+- Generate API credentials in your WP Engine User Portal
+- Enter your API username and password
+- Click **"Save & Test Credentials"**
 
-3. **Test the Setup**
-   - Use **Test API Connection** to verify credentials
-   - Create a manual backup to ensure everything works
-   - Enable automatic backups if desired
+**Step 2: Install Configuration**  
+- Click **"Auto-Detect & Configure Current Install"** (recommended)
+- Or manually select your install from the list
+- Confirm your WP Engine install details
 
-The plugin will automatically detect WP Engine hosting and show setup reminders if Alternate Cron is not properly configured.
+**Step 3: Email & Schedule**
+- Add your notification email address (required by WP Engine API)
+- Choose your backup frequency (1-24 hours)
+- Save your configuration
+
+**Step 4: Complete & Enable**
+- Review your configuration summary
+- Click **"🚀 Enable Automatic Backups"** to activate
+- Optionally test with a manual backup first
+
+**✨ Key Benefits:**
+- Visual progress indicators show your setup status
+- All forms remain editable after saving (modify settings anytime)
+- Success checkmarks confirm each completed step
+- Direct links to WP Engine portal for easy access
+- Mobile-responsive design works on all devices
 
 ## Configuration
 
@@ -353,16 +375,16 @@ Copyright (c) 2025 josefresco
 
 ## Changelog
 
-### 1.0.0
-- Initial release
-- Automated backup scheduling (1-24 hour intervals)
-- Manual backup creation with descriptions
-- WP Engine install auto-detection
-- Comprehensive activity logging
-- Dashboard widget for backup status
-- WP-CLI command support
-- REST API endpoints
-- Multi-environment support (production, staging, development)
+For detailed release notes and the complete changelog, see:
+**[📋 GitHub Releases](https://github.com/josefresco/wpengine-hourly-backup/releases)**
+
+### Recent Updates
+- **v1.1.3** - Fixed editing capability after save, forms now always remain editable
+- **v1.1.2** - Added version display in admin interface header
+- **v1.1.1** - GitHub CLI integration for streamlined development workflow
+- **v1.1.0** - Major UI overhaul with step-by-step onboarding interface
+- **v1.0.1** - WP Engine hosting compatibility and conflict resolution fixes
+- **v1.0.0** - Initial release with full backup automation features
 
 ---
 
