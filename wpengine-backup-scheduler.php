@@ -3,7 +3,7 @@
  * Plugin Name: WP Engine Backup Scheduler
  * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
- * Version: 1.1.1
+ * Version: 1.1.2
  * Author: josefresco
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
@@ -23,7 +23,7 @@ if (!defined('WPENGINE_BACKUP_PLUGIN_PATH')) {
     define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
 }
 if (!defined('WPENGINE_BACKUP_VERSION')) {
-    define('WPENGINE_BACKUP_VERSION', '1.1.1');
+    define('WPENGINE_BACKUP_VERSION', '1.1.2');
 }
 
 /**
@@ -429,7 +429,9 @@ class WPEngineBackupScheduler {
         
         ?>
         <div class="wrap">
-            <h1><?php _e('WP Engine Backup Scheduler', 'wpengine-backup-scheduler'); ?></h1>
+            <h1><?php _e('WP Engine Backup Scheduler', 'wpengine-backup-scheduler'); ?> 
+                <span style="font-size: 14px; color: #666; font-weight: normal;">v<?php echo WPENGINE_BACKUP_VERSION; ?></span>
+            </h1>
             
             <!-- Progress Indicator -->
             <div class="wpengine-setup-progress">
