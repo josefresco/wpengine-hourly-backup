@@ -51,6 +51,7 @@ class WPEngineBackupScheduler {
         add_action('wp_ajax_wpengine_test_backup', array($this, 'ajax_test_backup'));
         add_action('wp_ajax_wpengine_trigger_cron', array($this, 'ajax_trigger_cron'));
         add_action('wp_ajax_wpengine_test_schedule', array($this, 'ajax_test_schedule'));
+        add_action('wp_ajax_wpengine_disconnect', array($this, 'ajax_disconnect'));
         
         // Hook for scheduled backups
         add_action('wpengine_backup_cron_hook', array($this, 'execute_scheduled_backup'));
@@ -61,6 +62,7 @@ class WPEngineBackupScheduler {
         // Plugin activation/deactivation hooks
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
+        register_uninstall_hook(__FILE__, array('WPEngineBackupScheduler', 'uninstall'));
     }
     
     /**
@@ -97,6 +99,28 @@ class WPEngineBackupScheduler {
     public function deactivate() {
         // Clear scheduled events
         wp_clear_scheduled_hook('wpengine_backup_cron_hook');
+    }
+    
+    /**
+     * Plugin uninstall - clean up all data
+     */
+    public static function uninstall() {
+        // Clear scheduled events
+        wp_clear_scheduled_hook('wpengine_backup_cron_hook');
+        
+        // Delete plugin options
+        delete_option('wpengine_backup_settings');
+        
+        // Clear transients
+        delete_transient('wpengine_backup_running');
+        
+        // Drop the backup logs table
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wpengine_backup_logs';
+        $wpdb->query("DROP TABLE IF EXISTS $table_name");
+        
+        // Clean up any remaining transients with our prefix
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_wpengine_backup_%' OR option_name LIKE '_transient_timeout_wpengine_backup_%'");
     }
     
     /**
@@ -857,6 +881,8 @@ class WPEngineBackupScheduler {
                             <button type="button" id="debug-cron-btn" class="button"><?php _e('Run Cron Diagnostics', 'wpengine-backup-scheduler'); ?></button>
                             <button type="button" id="test-backup-btn" class="button"><?php _e('Test Backup Now', 'wpengine-backup-scheduler'); ?></button>
                             <button type="button" id="trigger-cron-btn" class="button"><?php _e('Trigger Cron Function', 'wpengine-backup-scheduler'); ?></button>
+                            <button type="button" id="test-schedule-btn" class="button"><?php _e('Test Schedule Creation', 'wpengine-backup-scheduler'); ?></button>
+                            <button type="button" id="disconnect-btn" class="button button-secondary" style="margin-left: 10px;"><?php _e('Disconnect & Reset', 'wpengine-backup-scheduler'); ?></button>
                             
                             <div id="debug-panel" style="display: none; margin-top: 15px; padding: 15px; background: #f0f0f0; border: 1px solid #ddd; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
                         </div>
@@ -1582,6 +1608,43 @@ class WPEngineBackupScheduler {
                 'debug' => $test_results
             ));
         }
+    }
+    
+    /**
+     * AJAX handler for disconnecting/resetting all settings
+     */
+    public function ajax_disconnect() {
+        check_ajax_referer('wpengine_backup_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wpengine-backup-scheduler'));
+        }
+        
+        // Clear all scheduled backup events
+        wp_clear_scheduled_hook('wpengine_backup_cron_hook');
+        
+        // Clear all plugin settings
+        delete_option('wpengine_backup_settings');
+        
+        // Clear any running backup transients
+        delete_transient('wpengine_backup_running');
+        
+        // Get table names for cleanup
+        global $wpdb;
+        $logs_table = $wpdb->prefix . 'wpengine_backup_logs';
+        
+        // Optional: Clear backup logs (commented out by default to preserve history)
+        // $wpdb->query("TRUNCATE TABLE $logs_table");
+        
+        wp_send_json_success(array(
+            'message' => __('All settings cleared successfully. Plugin has been reset to default state.', 'wpengine-backup-scheduler'),
+            'actions_taken' => array(
+                'cleared_scheduled_events' => true,
+                'deleted_settings' => true,
+                'cleared_transients' => true,
+                'preserved_logs' => true
+            )
+        ));
     }
     
     /**
@@ -2653,6 +2716,83 @@ add_action('admin_footer', function() {
                 
                 // Reload page after a delay to show results
                 setTimeout(function() { location.reload(); }, 3000);
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Test Schedule Creation
+        $('#test-schedule-btn').on('click', function() {
+            var $btn = $(this);
+            var $panel = $('#debug-panel');
+            var originalText = $btn.text();
+            
+            $btn.prop('disabled', true).text('<?php _e('Testing...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_test_schedule',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                var html = '<strong>🧪 SCHEDULE TEST RESULTS</strong><br><br>';
+                
+                if (response.success) {
+                    html += '✅ <strong>SUCCESS:</strong> ' + response.data.message + '<br><br>';
+                    html += '<strong>Debug Info:</strong><br>';
+                    html += '  Requested Interval: ' + response.data.debug.requested_interval + '<br>';
+                    html += '  Interval Available: ' + (response.data.debug.interval_available ? '✅ Yes' : '❌ No') + '<br>';
+                    html += '  Successfully Scheduled: ' + (response.data.debug.successfully_scheduled ? '✅ Yes' : '❌ No') + '<br>';
+                    if (response.data.debug.next_run_time) {
+                        html += '  Next Run Time: ' + response.data.debug.next_run_time + '<br>';
+                        html += '  Seconds Until Run: ' + response.data.debug.seconds_until_run + '<br>';
+                    }
+                    html += '  WP Engine Jobs Found: ' + response.data.debug.wpengine_jobs_found + '<br>';
+                } else {
+                    html += '❌ <strong>FAILED:</strong> ' + response.data.message + '<br><br>';
+                    if (response.data.debug) {
+                        html += '<strong>Debug Info:</strong><br>';
+                        html += JSON.stringify(response.data.debug, null, 2).replace(/\\n/g, '<br>').replace(/ {2}/g, '&nbsp;&nbsp;');
+                    }
+                }
+                
+                $panel.html(html).show();
+            }).always(function() {
+                $btn.prop('disabled', false).text(originalText);
+            });
+        });
+        
+        // Disconnect & Reset
+        $('#disconnect-btn').on('click', function() {
+            var $btn = $(this);
+            var $panel = $('#debug-panel');
+            var originalText = $btn.text();
+            
+            if (!confirm('<?php _e('This will clear ALL plugin settings, cancel scheduled backups, and reset the plugin to default state. This action cannot be undone. Continue?', 'wpengine-backup-scheduler'); ?>')) {
+                return;
+            }
+            
+            $btn.prop('disabled', true).text('<?php _e('Disconnecting...', 'wpengine-backup-scheduler'); ?>');
+            
+            $.post(wpengineBackup.ajaxUrl, {
+                action: 'wpengine_disconnect',
+                nonce: wpengineBackup.nonce
+            }, function(response) {
+                var html = '<strong>🔓 DISCONNECT RESULTS</strong><br><br>';
+                
+                if (response.success) {
+                    html += '✅ <strong>SUCCESS:</strong> ' + response.data.message + '<br><br>';
+                    html += '<strong>Actions Taken:</strong><br>';
+                    html += '  Cleared scheduled events: ' + (response.data.actions_taken.cleared_scheduled_events ? '✅' : '❌') + '<br>';
+                    html += '  Deleted settings: ' + (response.data.actions_taken.deleted_settings ? '✅' : '❌') + '<br>';
+                    html += '  Cleared transients: ' + (response.data.actions_taken.cleared_transients ? '✅' : '❌') + '<br>';
+                    html += '  Preserved logs: ' + (response.data.actions_taken.preserved_logs ? '✅' : '❌') + '<br>';
+                    
+                    // Reload page after a delay to show clean state
+                    setTimeout(function() { location.reload(); }, 2000);
+                } else {
+                    html += '❌ <strong>FAILED:</strong> ' + response.data + '<br>';
+                }
+                
+                $panel.html(html).show();
             }).always(function() {
                 $btn.prop('disabled', false).text(originalText);
             });
