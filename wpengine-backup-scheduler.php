@@ -3,7 +3,7 @@
  * Plugin Name: WP Engine Backup Scheduler
  * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
- * Version: 1.1.4
+ * Version: 1.1.5
  * Author: josefresco
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
@@ -23,7 +23,7 @@ if (!defined('WPENGINE_BACKUP_PLUGIN_PATH')) {
     define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
 }
 if (!defined('WPENGINE_BACKUP_VERSION')) {
-    define('WPENGINE_BACKUP_VERSION', '1.1.4');
+    define('WPENGINE_BACKUP_VERSION', '1.1.5');
 }
 
 /**
@@ -1576,20 +1576,21 @@ class WPEngineBackupScheduler {
         // Get existing settings first
         $settings = get_option('wpengine_backup_settings', array());
         
-        // Update only the API-related settings
+        // Update API and configuration settings
         $settings['api_username'] = sanitize_text_field($_POST['api_username'] ?? '');
         $settings['api_password'] = sanitize_text_field($_POST['api_password'] ?? '');
         $settings['install_id'] = sanitize_text_field($_POST['install_id'] ?? '');
         $settings['install_name'] = sanitize_text_field($_POST['install_name'] ?? '');
         $settings['email_notifications'] = sanitize_email($_POST['email_notifications'] ?? '');
         
-        // Keep existing schedule settings if they exist
-        if (!isset($settings['backup_frequency'])) {
-            $settings['backup_frequency'] = '24';
+        // Update backup frequency if provided
+        if (isset($_POST['backup_frequency'])) {
+            $settings['backup_frequency'] = intval($_POST['backup_frequency']);
+        } else if (!isset($settings['backup_frequency'])) {
+            $settings['backup_frequency'] = 24;
         }
-        if (!isset($settings['email_notifications'])) {
-            $settings['email_notifications'] = '';
-        }
+        
+        // Keep existing enabled setting if not explicitly set
         if (!isset($settings['enabled'])) {
             $settings['enabled'] = false;
         }
