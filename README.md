@@ -390,7 +390,7 @@ This plugin is licensed under the MIT License. See the [LICENSE](LICENSE) file f
 - ❌ No warranty provided
 - ❌ No liability accepted
 
-Copyright (c) 2025 josefresco
+Copyright (c) 2024 josefresco
 
 ## Changelog
 
