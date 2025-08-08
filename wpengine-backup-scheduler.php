@@ -50,6 +50,7 @@ class WPEngineBackupScheduler {
         add_action('wp_ajax_wpengine_debug_cron', array($this, 'ajax_debug_cron'));
         add_action('wp_ajax_wpengine_test_backup', array($this, 'ajax_test_backup'));
         add_action('wp_ajax_wpengine_trigger_cron', array($this, 'ajax_trigger_cron'));
+        add_action('wp_ajax_wpengine_test_schedule', array($this, 'ajax_test_schedule'));
         
         // Hook for scheduled backups
         add_action('wpengine_backup_cron_hook', array($this, 'execute_scheduled_backup'));
@@ -127,16 +128,27 @@ class WPEngineBackupScheduler {
      * Setup custom cron schedules
      */
     public function setup_cron_schedules() {
-        add_filter('cron_schedules', function($schedules) {
-            // Add hourly intervals from 1-23 hours
-            for ($i = 1; $i <= 23; $i++) {
-                $schedules["every_{$i}_hours"] = array(
-                    'interval' => $i * HOUR_IN_SECONDS,
-                    'display' => sprintf(__('Every %d Hours', 'wpengine-backup-scheduler'), $i)
-                );
-            }
-            return $schedules;
-        });
+        // Use static variable to prevent duplicate filter additions
+        static $schedules_registered = false;
+        
+        if (!$schedules_registered) {
+            add_filter('cron_schedules', array($this, 'add_custom_cron_schedules'));
+            $schedules_registered = true;
+        }
+    }
+    
+    /**
+     * Add custom cron schedules to WordPress
+     */
+    public function add_custom_cron_schedules($schedules) {
+        // Add hourly intervals from 1-23 hours
+        for ($i = 1; $i <= 23; $i++) {
+            $schedules["every_{$i}_hours"] = array(
+                'interval' => $i * HOUR_IN_SECONDS,
+                'display' => sprintf(__('Every %d Hours', 'wpengine-backup-scheduler'), $i)
+            );
+        }
+        return $schedules;
     }
     
     /**
@@ -1387,9 +1399,59 @@ class WPEngineBackupScheduler {
             $debug_info['api_test'] = array('success' => false, 'message' => 'No credentials configured');
         }
         
-        // Add available cron schedules for debugging
+        // Add comprehensive cron debugging
         $schedules = wp_get_schedules();
         $debug_info['available_schedules'] = array_keys($schedules);
+        
+        // Check if custom schedules exist
+        $debug_info['custom_schedules_registered'] = array();
+        for ($i = 1; $i <= 23; $i++) {
+            $schedule_name = "every_{$i}_hours";
+            $debug_info['custom_schedules_registered'][$schedule_name] = array_key_exists($schedule_name, $schedules);
+        }
+        
+        // Check current WordPress cron jobs
+        $cron = _get_cron_array();
+        $debug_info['all_cron_jobs'] = array();
+        $debug_info['wpengine_cron_jobs'] = array();
+        
+        if ($cron) {
+            foreach ($cron as $timestamp => $cronhooks) {
+                foreach ($cronhooks as $hook => $details) {
+                    $debug_info['all_cron_jobs'][] = array(
+                        'timestamp' => $timestamp,
+                        'hook' => $hook,
+                        'time' => date('Y-m-d H:i:s', $timestamp),
+                        'details' => $details
+                    );
+                    
+                    if ($hook === 'wpengine_backup_cron_hook') {
+                        $debug_info['wpengine_cron_jobs'][] = array(
+                            'timestamp' => $timestamp,
+                            'time' => date('Y-m-d H:i:s', $timestamp),
+                            'details' => $details
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Test schedule creation manually
+        $debug_info['manual_schedule_test'] = array();
+        if ($settings['enabled']) {
+            $interval = $settings['backup_frequency'] == 24 ? 'daily' : "every_{$settings['backup_frequency']}_hours";
+            $debug_info['manual_schedule_test']['requested_interval'] = $interval;
+            $debug_info['manual_schedule_test']['interval_exists'] = array_key_exists($interval, $schedules);
+            $debug_info['manual_schedule_test']['interval_details'] = $schedules[$interval] ?? null;
+            
+            // Try to manually schedule (but don't actually do it to avoid duplicates)
+            $debug_info['manual_schedule_test']['would_schedule'] = array(
+                'function' => 'wp_schedule_event',
+                'time' => time(),
+                'interval' => $interval,
+                'hook' => 'wpengine_backup_cron_hook'
+            );
+        }
         
         wp_send_json_success($debug_info);
     }
@@ -1437,6 +1499,88 @@ class WPEngineBackupScheduler {
             wp_send_json_success(__('Scheduled backup function executed successfully. Check backup logs for details.', 'wpengine-backup-scheduler'));
         } else {
             wp_send_json_error(__('Scheduled backup function returned an error. Check logs for details.', 'wpengine-backup-scheduler'));
+        }
+    }
+    
+    /**
+     * AJAX handler for testing cron scheduling
+     */
+    public function ajax_test_schedule() {
+        check_ajax_referer('wpengine_backup_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Insufficient permissions', 'wpengine-backup-scheduler'));
+        }
+        
+        $settings = get_option('wpengine_backup_settings', array());
+        $test_results = array();
+        
+        // Clear any existing schedule first
+        wp_clear_scheduled_hook('wpengine_backup_cron_hook');
+        $test_results['cleared_existing'] = true;
+        
+        if (!$settings['enabled']) {
+            wp_send_json_error('Scheduling is disabled in settings.');
+            return;
+        }
+        
+        // Ensure custom schedules are registered before testing
+        $this->setup_cron_schedules();
+        
+        // Check if custom schedules are available
+        $schedules = wp_get_schedules();
+        $interval = $settings['backup_frequency'] == 24 ? 'daily' : "every_{$settings['backup_frequency']}_hours";
+        
+        $test_results['requested_interval'] = $interval;
+        $test_results['interval_available'] = array_key_exists($interval, $schedules);
+        $test_results['all_schedules'] = array_keys($schedules);
+        
+        if (!$test_results['interval_available']) {
+            wp_send_json_error(array(
+                'message' => "Interval '$interval' not available",
+                'debug' => $test_results
+            ));
+            return;
+        }
+        
+        // Try to schedule the event
+        $schedule_result = wp_schedule_event(time(), $interval, 'wpengine_backup_cron_hook');
+        $test_results['schedule_result'] = $schedule_result;
+        $test_results['schedule_error'] = $schedule_result === false;
+        
+        // Check if it was actually scheduled
+        $next_scheduled = wp_next_scheduled('wpengine_backup_cron_hook');
+        $test_results['next_scheduled'] = $next_scheduled;
+        $test_results['successfully_scheduled'] = $next_scheduled !== false;
+        
+        if ($next_scheduled) {
+            $test_results['next_run_time'] = date('Y-m-d H:i:s', $next_scheduled);
+            $test_results['seconds_until_run'] = $next_scheduled - time();
+        }
+        
+        // Get all current cron jobs to verify
+        $cron = _get_cron_array();
+        $test_results['wpengine_jobs_found'] = 0;
+        if ($cron) {
+            foreach ($cron as $timestamp => $cronhooks) {
+                foreach ($cronhooks as $hook => $details) {
+                    if ($hook === 'wpengine_backup_cron_hook') {
+                        $test_results['wpengine_jobs_found']++;
+                    }
+                }
+            }
+        }
+        
+        if ($test_results['successfully_scheduled']) {
+            wp_send_json_success(array(
+                'message' => 'Cron schedule test successful!',
+                'debug' => $test_results
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => 'Failed to schedule cron event',
+                'debug' => $test_results
+            ));
         }
     }
     
@@ -1632,6 +1776,9 @@ class WPEngineBackupScheduler {
         wp_clear_scheduled_hook('wpengine_backup_cron_hook');
         
         if ($settings['enabled']) {
+            // Ensure custom schedules are registered before scheduling
+            $this->setup_cron_schedules();
+            
             $interval = $settings['backup_frequency'] == 24 ? 'daily' : "every_{$settings['backup_frequency']}_hours";
             wp_schedule_event(time(), $interval, 'wpengine_backup_cron_hook');
         }
@@ -3003,6 +3150,9 @@ if (defined('WP_CLI') && WP_CLI) {
             wp_clear_scheduled_hook('wpengine_backup_cron_hook');
             
             if ($settings['enabled']) {
+                // Ensure custom schedules are registered before scheduling
+                $this->setup_cron_schedules();
+                
                 $interval = $settings['backup_frequency'] == 24 ? 'daily' : "every_{$settings['backup_frequency']}_hours";
                 wp_schedule_event(time(), $interval, 'wpengine_backup_cron_hook');
             }
