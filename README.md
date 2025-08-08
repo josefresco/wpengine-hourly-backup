@@ -2,6 +2,8 @@
 
 A WordPress plugin that provides automated backup scheduling for WP Engine hosted sites using the official WP Engine API.
 
+> **DISCLAIMER**: This plugin is an independent third-party tool and is not affiliated with, endorsed by, or sponsored by WP Engine, Inc. WP Engine and all related trademarks, service marks, and trade names are trademarks or registered trademarks of WP Engine, Inc. and are used here solely for identification purposes.
+
 ![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -396,12 +398,39 @@ For detailed release notes and the complete changelog, see:
 **[📋 GitHub Releases](https://github.com/josefresco/wpengine-hourly-backup/releases)**
 
 ### Recent Updates
+- **v1.2.3** - Documentation and legal compliance updates (no code changes)
+- **v1.2.2** - Stable release with fixed onboarding flow and cron scheduling
+- **v1.2.1** - Fixed UI state refresh after auto-detection with email requirement restored
+- **v1.2.0** - Attempted onboarding fix (superseded by v1.2.1)
+- **v1.1.9** - Reverted to stable v1.1.5 codebase due to onboarding issues
+- **v1.1.5** - Fixed broken cron scheduling from v1.1.3 changes
 - **v1.1.3** - Fixed editing capability after save, forms now always remain editable
 - **v1.1.2** - Added version display in admin interface header
 - **v1.1.1** - GitHub CLI integration for streamlined development workflow
 - **v1.1.0** - Major UI overhaul with step-by-step onboarding interface
-- **v1.0.1** - WP Engine hosting compatibility and conflict resolution fixes
-- **v1.0.0** - Initial release with full backup automation features
+
+---
+
+## Legal & Disclaimer
+
+### Trademark Notice
+WP Engine® is a registered trademark of WP Engine, Inc. This plugin is an independent third-party tool and is not affiliated with, endorsed by, sponsored by, or otherwise associated with WP Engine, Inc.
+
+### Copyright Notice  
+- This plugin software is released under the MIT License
+- WP Engine and all related trademarks, service marks, logos, and trade names are the property of WP Engine, Inc.
+- WordPress is a trademark of the WordPress Foundation
+- All other trademarks, service marks, and trade names referenced herein are the property of their respective owners
+
+### Disclaimer of Affiliation
+The author and contributors of this plugin:
+- Are not employees, agents, or representatives of WP Engine, Inc.
+- Do not claim any official relationship with WP Engine, Inc.
+- Provide this plugin "as-is" without warranty or official support from WP Engine
+- Use WP Engine's name and API solely for the purpose of providing integration functionality
+
+### License & Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. USE AT YOUR OWN RISK.
 
 ---
 
