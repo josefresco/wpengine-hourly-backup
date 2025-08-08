@@ -398,6 +398,7 @@ For detailed release notes and the complete changelog, see:
 **[📋 GitHub Releases](https://github.com/josefresco/wpengine-hourly-backup/releases)**
 
 ### Recent Updates
+- **v1.2.4** - Updated copyright date and legal documentation
 - **v1.2.3** - Documentation and legal compliance updates (no code changes)
 - **v1.2.2** - Stable release with fixed onboarding flow and cron scheduling
 - **v1.2.1** - Fixed UI state refresh after auto-detection with email requirement restored
