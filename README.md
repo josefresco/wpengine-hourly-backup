@@ -289,7 +289,24 @@ Content-Type: application/json
 
 ### Debug Information
 
-Use the **Debug Settings** button in the admin interface to view current configuration and troubleshoot issues.
+The plugin includes comprehensive debugging tools:
+
+#### Cron Diagnostics
+- **Environment Detection**: Verifies WP Engine hosting and WordPress cron status
+- **Schedule Verification**: Shows all registered custom intervals (every_1_hours through every_23_hours)
+- **Active Cron Jobs**: Displays all WordPress cron jobs and WP Engine specific jobs
+- **Next Backup Time**: Shows exact timestamp and countdown for next scheduled backup
+
+#### Manual Testing Tools
+- **Test Schedule Creation**: Manually test cron event scheduling with detailed results
+- **Run Cron Diagnostics**: Comprehensive system analysis and troubleshooting
+- **Test Backup Now**: Execute backup function manually for testing
+- **Trigger Cron Function**: Manually run the scheduled backup function
+
+#### API Debugging  
+- **Connection Testing**: Verify API credentials and connectivity
+- **Install Detection**: Test auto-detection functionality
+- **Backup Listing**: Fetch and display recent backups from WP Engine
 
 ### Error Codes
 
