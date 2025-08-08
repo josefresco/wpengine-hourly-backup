@@ -54,6 +54,9 @@ class WPEngineBackupScheduler {
         // Hook for scheduled backups
         add_action('wpengine_backup_cron_hook', array($this, 'execute_scheduled_backup'));
         
+        // Setup custom cron schedules early
+        $this->setup_cron_schedules();
+        
         // Plugin activation/deactivation hooks
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
@@ -64,7 +67,6 @@ class WPEngineBackupScheduler {
      */
     public function init() {
         load_plugin_textdomain('wpengine-backup-scheduler', false, dirname(plugin_basename(__FILE__)) . '/languages');
-        $this->setup_cron_schedules();
     }
     
     /**
@@ -1384,6 +1386,10 @@ class WPEngineBackupScheduler {
         } else {
             $debug_info['api_test'] = array('success' => false, 'message' => 'No credentials configured');
         }
+        
+        // Add available cron schedules for debugging
+        $schedules = wp_get_schedules();
+        $debug_info['available_schedules'] = array_keys($schedules);
         
         wp_send_json_success($debug_info);
     }
