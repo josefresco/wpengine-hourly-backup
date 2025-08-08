@@ -430,7 +430,7 @@ class WPEngineBackupScheduler {
         // Determine setup progress
         $has_api_credentials = !empty($settings['api_username']) && !empty($settings['api_password']);
         $has_install_config = !empty($settings['install_id']) && !empty($settings['install_name']);
-        $has_schedule_config = !empty($settings['backup_frequency']); // Check frequency instead of email
+        $has_email_config = !empty($settings['email_notifications']); // Email is required
         $is_enabled = $settings['enabled'] ?? false;
         
         ?>
@@ -449,11 +449,11 @@ class WPEngineBackupScheduler {
                     <span class="step-number">2</span>
                     <span class="step-title"><?php _e('Install Setup', 'wpengine-backup-scheduler'); ?></span>
                 </div>
-                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_schedule_config ? 'completed' : 'active'); ?>" data-step="3">
+                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_email_config ? 'completed' : 'active'); ?>" data-step="3">
                     <span class="step-number">3</span>
                     <span class="step-title"><?php _e('Email & Schedule', 'wpengine-backup-scheduler'); ?></span>
                 </div>
-                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config || !$has_schedule_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>" data-step="4">
+                <div class="progress-step <?php echo (!$has_api_credentials || !$has_install_config || !$has_email_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>" data-step="4">
                     <span class="step-number">4</span>
                     <span class="step-title"><?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
                 </div>
@@ -622,11 +622,11 @@ class WPEngineBackupScheduler {
                     </div>
                     
                     <!-- Step 3: Email & Schedule Configuration -->
-                    <div class="postbox setup-step step-3 <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_schedule_config ? 'completed' : 'active'); ?>">
+                    <div class="postbox setup-step step-3 <?php echo (!$has_api_credentials || !$has_install_config) ? 'disabled' : ($has_email_config ? 'completed' : 'active'); ?>">
                         <h2 class="hndle">
                             <span class="step-indicator">3</span>
                             <?php _e('Email & Schedule Configuration', 'wpengine-backup-scheduler'); ?>
-                            <?php if ($has_schedule_config) : ?>
+                            <?php if ($has_email_config) : ?>
                                 <span class="status-badge completed">✓ <?php _e('Complete', 'wpengine-backup-scheduler'); ?></span>
                             <?php endif; ?>
                         </h2>
@@ -686,7 +686,7 @@ class WPEngineBackupScheduler {
                                         <span id="email-schedule-status"></span>
                                     </div>
                                     
-                                    <?php if ($has_schedule_config) : ?>
+                                    <?php if ($has_email_config) : ?>
                                         <div class="step-completed-actions">
                                             <span class="success-indicator" style="color: #46b450;">
                                                 <?php _e('✅ Email & Schedule Configured', 'wpengine-backup-scheduler'); ?>
@@ -699,7 +699,7 @@ class WPEngineBackupScheduler {
                     </div>
                     
                     <!-- Step 4: Complete & Enable -->
-                    <div class="postbox setup-step step-4 <?php echo (!$has_api_credentials || !$has_install_config || !$has_schedule_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>">
+                    <div class="postbox setup-step step-4 <?php echo (!$has_api_credentials || !$has_install_config || !$has_email_config) ? 'disabled' : ($is_enabled ? 'completed' : 'active'); ?>">
                         <h2 class="hndle">
                             <span class="step-indicator">4</span>
                             <?php _e('Complete Setup', 'wpengine-backup-scheduler'); ?>
@@ -708,7 +708,7 @@ class WPEngineBackupScheduler {
                             <?php endif; ?>
                         </h2>
                         <div class="inside">
-                            <?php if (!$has_api_credentials || !$has_install_config || !$has_schedule_config) : ?>
+                            <?php if (!$has_api_credentials || !$has_install_config || !$has_email_config) : ?>
                                 <div class="step-disabled-notice">
                                     <p><?php _e('Complete all previous steps to enable automatic backups.', 'wpengine-backup-scheduler'); ?></p>
                                 </div>
@@ -2173,9 +2173,14 @@ add_action('admin_footer', function() {
                     
                     $status.addClass('status-success').text(response.data.message);
                     
-                    // Show success message
-                    $('<div class="notice notice-success is-dismissible"><p>' + response.data.message + '</p></div>')
-                        .insertAfter('.wrap h1').delay(5000).fadeOut();
+                    // Show success message and reload page to update UI state
+                    $('<div class="notice notice-success is-dismissible"><p>' + response.data.message + '<br><strong>Reloading page to update interface...</strong></p></div>')
+                        .insertAfter('.wrap h1');
+                    
+                    // Reload page after short delay to show updated step states
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
                 } else {
                     $status.addClass('status-error').text(response.data);
                 }
