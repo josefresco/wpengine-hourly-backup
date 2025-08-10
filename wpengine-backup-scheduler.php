@@ -3,7 +3,7 @@
  * Plugin Name: WP Engine Backup Scheduler
  * Plugin URI: https://github.com/josefresco/wpengine-hourly-backup
  * Description: Automated backup scheduling for WP Engine hosted sites using the WP Engine API
- * Version: 1.2.3
+ * Version: 1.2.5
  * Author: josefresco
  * License: MIT
  * License URI: https://opensource.org/licenses/MIT
@@ -23,7 +23,7 @@ if (!defined('WPENGINE_BACKUP_PLUGIN_PATH')) {
     define('WPENGINE_BACKUP_PLUGIN_PATH', plugin_dir_path(__FILE__));
 }
 if (!defined('WPENGINE_BACKUP_VERSION')) {
-    define('WPENGINE_BACKUP_VERSION', '1.1.5');
+    define('WPENGINE_BACKUP_VERSION', '1.2.5');
 }
 
 /**
@@ -662,6 +662,16 @@ class WPEngineBackupScheduler {
                                         
                                         <table class="form-table">
                                             <tr>
+                                                <th scope="row"><?php _e('Enable Scheduled Backups', 'wpengine-backup-scheduler'); ?></th>
+                                                <td>
+                                                    <label>
+                                                        <input type="checkbox" name="enabled" id="enabled" <?php checked($settings['enabled'] ?? false); ?> />
+                                                        <?php _e('Enable automatic scheduled backups', 'wpengine-backup-scheduler'); ?>
+                                                    </label>
+                                                    <p class="description"><?php _e('Uncheck this to disable all scheduled backups. You can still create backups manually.', 'wpengine-backup-scheduler'); ?></p>
+                                                </td>
+                                            </tr>
+                                            <tr>
                                                 <th scope="row"><?php _e('Backup Frequency', 'wpengine-backup-scheduler'); ?></th>
                                                 <td>
                                                     <select name="backup_frequency" id="backup_frequency">
@@ -681,8 +691,15 @@ class WPEngineBackupScheduler {
                                     
                                     <div class="step-actions">
                                         <button type="submit" class="button-primary">
-                                            <?php _e('Save Configuration', 'wpengine-backup-scheduler'); ?>
+                                            <?php _e('Save Schedule Settings', 'wpengine-backup-scheduler'); ?>
                                         </button>
+                                        <?php 
+                                        $next_backup = wp_next_scheduled('wpengine_backup_cron_hook');
+                                        if ($next_backup && ($settings['enabled'] ?? false)) : ?>
+                                            <button type="button" id="cancel-schedule-btn" class="button button-secondary" style="margin-left: 10px;">
+                                                <?php _e('Cancel Schedule', 'wpengine-backup-scheduler'); ?>
+                                            </button>
+                                        <?php endif; ?>
                                         <span id="email-schedule-status"></span>
                                     </div>
                                     
@@ -2047,6 +2064,24 @@ add_action('admin_footer', function() {
     ?>
     <script>
     jQuery(document).ready(function($) {
+        // Enable/Disable Schedule Toggle Functionality
+        function toggleScheduleFields() {
+            var isEnabled = $('#enabled').is(':checked');
+            $('#backup_frequency').prop('disabled', !isEnabled);
+            
+            if (isEnabled) {
+                $('#backup_frequency').closest('tr').fadeIn();
+            } else {
+                $('#backup_frequency').closest('tr').fadeOut();
+            }
+        }
+        
+        // Initial state
+        toggleScheduleFields();
+        
+        // Handle checkbox changes
+        $('#enabled').on('change', toggleScheduleFields);
+        
         // Save Email Settings
         $('#wpengine-email-settings').on('submit', function(e) {
             e.preventDefault();
