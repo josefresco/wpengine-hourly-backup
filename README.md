@@ -1,4 +1,4 @@
-# WP Engine Backup Scheduler v1.2.5 🔧
+# WP Engine Backup Scheduler v1.2.6 🔧
 
 **Professional automated backup solution for WP Engine hosted WordPress sites using the official WP Engine API.**
 
@@ -37,7 +37,7 @@
 - **Debug Tools Suite**: Advanced diagnostics including cron analysis and API testing
 
 ### 🏗️ **Technical Architecture**
-- **Plugin Version**: v1.2.5 with semantic versioning
+- **Plugin Version**: v1.2.6 with semantic versioning
 - **WordPress Cron Integration**: Custom schedules from 1-23 hours with conflict resolution
 - **WP Engine API Integration**: Direct API v1 integration with timeout protection
 - **Database Schema**: Custom logging table with full activity tracking
@@ -211,7 +211,7 @@ wp wpengine-backup toggle enable --frequency=12
 wp wpengine-backup toggle disable
 ```
 
-### 🔍 **Advanced Diagnostics (v1.2.5+)**
+### 🔍 **Advanced Diagnostics (v1.2.6+)**
 ```bash
 # Run comprehensive system diagnostics
 wp wpengine-backup debug
@@ -334,7 +334,7 @@ GET /wp-json/wpengine-backup/v1/health
 {
   "success": true,
   "data": {
-    "plugin_version": "1.2.5",
+    "plugin_version": "1.2.6",
     "wp_engine_detected": true,
     "api_connected": true,
     "cron_enabled": true,
@@ -531,7 +531,7 @@ For detailed release notes and the complete changelog, see:
 
 ### 🚀 **Version History & Evolution**
 
-#### **v1.2.5 - Production Grade (Current)**
+#### **v1.2.6 - Production Grade (Current)**
 - **🏗️ Complete Technical Architecture**: 2,000+ lines of enterprise-grade PHP code
 - **🔧 Advanced AJAX System**: 12 dedicated AJAX endpoints with comprehensive error handling
 - **🖥️ Professional Admin Interface**: Step-by-step onboarding with visual progress indicators
